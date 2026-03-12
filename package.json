@@ -1,6 +1,6 @@
 {
   "name": "cowork",
-  "displayName": "YoTypeScript",
+  "displayName": "Cowork",
   "description": "A Claude AI assistant that lives in your editor — ask questions, get code suggestions, and collaborate without leaving VS Code",
   "version": "0.0.1",
   "engines": {
@@ -9,7 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": ["onCommand:cowork.ask"],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -22,6 +22,14 @@
         "title": "Cowork: Clear Chat"
       }
     ],
+    "chatParticipants": [
+      {
+        "id": "cowork.chat",
+        "name": "cowork",
+        "description": "Cowork coding assistant powered by Claude",
+        "isSticky": true
+      }
+],
     "keybindings": [
     {
         "command": "cowork.ask",
