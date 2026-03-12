@@ -9,35 +9,54 @@
   "categories": [
     "Other"
   ],
+  "publisher": "your-publisher-id",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/cowork"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "assistant",
+    "code",
+    "copilot"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
-  "contributes": {
-    "commands": [
-      {
-        "command": "cowork.ask",
-        "title": "Ask Claude"
-      },
-      {
-        "command": "cowork.clear",
-        "title": "Cowork: Clear Chat"
-      }
-    ],
-    "chatParticipants": [
-      {
-        "id": "cowork.chat",
-        "name": "cowork",
-        "description": "Cowork coding assistant powered by Claude",
-        "isSticky": true
-      }
-],
-    "keybindings": [
+"contributes": {
+  "commands": [
     {
-        "command": "cowork.ask",
-        "key": "ctrl+shift+c",
-        "mac": "cmd+shift+c"
+      "command": "cowork.ask",
+      "title": "Ask Claude",
+      "icon": "$(comment-discussion)"
+    },
+    {
+      "command": "cowork.clear",
+      "title": "Cowork: Clear Chat"
+    },
+    {
+      "command": "cowork.askWithSelection",
+      "title": "Ask Claude about this code"
     }
-]
-  },
+  ],
+  "keybindings": [
+    {
+      "command": "cowork.ask",
+      "key": "ctrl+shift+c",
+      "mac": "cmd+shift+c"
+    }
+  ],
+  "menus": {
+    "editor/context": [
+      {
+        "command": "cowork.askWithSelection",
+        "when": "editorTextFocus && editorHasSelection",
+        "group": "1_modification"
+      }
+    ]
+  }
+},
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
