@@ -423,6 +423,37 @@ inputEl.addEventListener('input', () => {
 
 newChatBtn.addEventListener('click', newConversation);
 
+
+// API Key handling
+const apiModalOverlay = document.getElementById("api-modal-overlay");
+const apiKeyInput = document.getElementById("api-key-input");
+const apiKeySave = document.getElementById("api-key-save");
+
+async function initApiKey() {
+    const key = await window.cowork.getApiKey();
+    if (key) {
+        apiModalOverlay.style.display = "none";
+    } else {
+        apiModalOverlay.style.display = "flex";
+    }
+}
+
+apiKeySave.addEventListener("click", async () => {
+    const key = apiKeyInput.value.trim();
+    if (key.startsWith("sk-ant-")) {
+        await window.cowork.setApiKey(key);
+        apiModalOverlay.style.display = "none";
+    } else {
+        apiKeyInput.style.borderColor = "#f48771";
+        setTimeout(() => { apiKeyInput.style.borderColor = "#555"; }, 1500);
+    }
+});
+
+apiKeyInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { apiKeySave.click(); }
+});
+
 // -- Init ----------------------------------------------------------------------
 loadState();
+initApiKey();
 

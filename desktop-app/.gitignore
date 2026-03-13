@@ -1,1 +1,3 @@
-echo "node_modules/`n.env`ndist/" > .gitignore
+node_modules/
+dist/
+.env
