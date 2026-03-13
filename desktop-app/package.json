@@ -1,0 +1,31 @@
+{
+  "name": "cowork-desktop",
+  "version": "1.0.0",
+  "description": "Cowork desktop app powered by Claude",
+  "main": "src/main.js",
+  "author": "syntactyx",
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "dotenv": "^17.3.1",
+    "electron": "^41.0.1"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.syntactyx.cowork",
+    "productName": "Cowork",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
