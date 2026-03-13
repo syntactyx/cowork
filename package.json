@@ -10,7 +10,6 @@
     "Other"
   ],
   "publisher": "your-publisher-id",
-  "icon": "icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/cowork"
