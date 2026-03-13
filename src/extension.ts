@@ -173,7 +173,7 @@ function getWebviewContent(): string {
                 border-radius: 3px;
                 font-size: 12px;
             }
-                
+
             .user {
                 align-self: flex-end;
                 background: #0e4f8b;
@@ -824,6 +824,62 @@ export function activate(context: vscode.ExtensionContext) {
 
     conversationStore = loadConversations();
     createPanel();
+
+    // Register @cowork Copilot Chat participant
+    const chatParticipant = vscode.chat.createChatParticipant('cowork.chat', async (request, _context, response, token) => {
+        const activeConv = getActiveConversation();
+        if (!activeConv) { 
+            response.markdown('No active conversation found. Please open the Cowork panel first.');
+            return;
+        }
+
+        let prompt = request.prompt;
+
+        // Include selected code if any
+        const editor = vscode.window.activeTextEditor;
+        const selectedText = editor?.document.getText(editor.selection);
+        if (selectedText && selectedText.trim().length > 0) {
+            prompt = `The following code is selected in my editor:\n\`\`\`\n${selectedText}\n\`\`\`\n\n${prompt}`;
+        }
+
+        // Add to shared conversation history
+        activeConv.messages.push({ role: 'user', content: prompt });
+        updateConversationTitle(activeConv);
+        activeConv.lastUpdated = Date.now();
+
+        try {
+            const stream = await client.messages.stream({
+                model: 'claude-opus-4-20250514',
+                max_tokens: 8192,
+                system: SYSTEM_PROMPT,
+                messages: activeConv.messages
+            });
+
+            let reply = '';
+
+            for await (const chunk of stream) {
+                if (token.isCancellationRequested) { break; }
+                if (
+                    chunk.type === 'content_block_delta' &&
+                    chunk.delta.type === 'text_delta'
+                ) {
+                    reply += chunk.delta.text;
+                    response.markdown(chunk.delta.text);
+                }
+            }
+
+            // Save to shared history and sync WebView
+            activeConv.messages.push({ role: 'assistant', content: reply });
+            saveConversations();
+            updateWebviewState();
+
+        } catch (err) {
+            response.markdown(`**Error:** ${String(err)}`);
+        }
+    });
+
+    chatParticipant.iconPath = new vscode.ThemeIcon('hubot');
+    context.subscriptions.push(chatParticipant);
 
     const askCommand = vscode.commands.registerCommand('cowork.ask', () => {
         if (panel) {

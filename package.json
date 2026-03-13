@@ -25,6 +25,14 @@
   "activationEvents": [],
   "main": "./out/extension.js",
 "contributes": {
+  "chatParticipants": [
+        {
+          "id": "cowork.chat",
+          "name": "cowork",
+          "description": "Cowork coding assistant powered by Claude",
+          "isSticky": true
+        }
+    ],
   "commands": [
     {
       "command": "cowork.ask",
