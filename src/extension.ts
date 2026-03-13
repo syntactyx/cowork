@@ -1,11 +1,8 @@
 import * as vscode from 'vscode';
 import Anthropic from '@anthropic-ai/sdk';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
 
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
-const client = new Anthropic();
+const apiKey = vscode.workspace.getConfiguration('cowork').get<string>('apiKey') || process.env.ANTHROPIC_API_KEY;
+const client = new Anthropic({ apiKey });
 
 interface Conversation {
     id: string;

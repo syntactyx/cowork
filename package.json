@@ -24,6 +24,16 @@
   "activationEvents": [],
   "main": "./out/extension.js",
 "contributes": {
+  "configuration": {
+    "title": "Cowork",
+    "properties": {
+        "cowork.apiKey": {
+            "type": "string",
+            "default": "",
+            "description": "Your Anthropic API key"
+            }
+        }
+    },
   "chatParticipants": [
         {
           "id": "cowork.chat",
