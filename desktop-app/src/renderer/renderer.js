@@ -14,8 +14,6 @@ const modalCancel = document.getElementById('modal-cancel');
 const modalSave = document.getElementById('modal-save');
 const systemPromptInput = document.getElementById('system-prompt-input');
 const attachmentPreview = document.getElementById('attachment-preview');
-const attachmentName = document.getElementById('attachment-name');
-const removeAttachment = document.getElementById('remove-attachment');
 
 const DEFAULT_SYSTEM_PROMPT = `You are Cowork, a coding assistant running as a standalone desktop app.
 You help with code suggestions, explanations, debugging, and general programming questions.
@@ -26,8 +24,14 @@ let state = {
     conversations: [],
     activeId: null,
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
-    attachment: null,
-    savedMessages: []
+    attachment: null,       // kept for legacy read compatibility
+    attachments: [],
+    savedMessages: [],
+    autoTrigger: {
+        enabled: false,
+        threshold: 50,
+        confirm: true
+    }
 };
 
 // ── Marked setup ──────────────────────────────────────────────────────────────
@@ -60,6 +64,9 @@ async function loadState() {
         state.activeId = saved.activeId || saved.conversations[0].id;
         state.systemPrompt = saved.systemPrompt || DEFAULT_SYSTEM_PROMPT;
         state.savedMessages = saved.savedMessages || [];
+        if (saved.autoTrigger) {
+            state.autoTrigger = Object.assign({}, state.autoTrigger, saved.autoTrigger);
+        }
     }
     _stateReady = true;
     if (state.conversations.length === 0) {
@@ -126,7 +133,7 @@ function renderSidebar() {
         item.className = 'conversation-item' + (conv.id === state.activeId ? ' active' : '');
         item.innerHTML = `
             <span class="conv-title">${conv.title}</span>
-            <span class="conv-delete" data-id="${conv.id}">&times;</span>
+            <span class="conv-delete" data-id="${conv.id}" title="Delete this conversation">&times;</span>
         `;
         item.querySelector('.conv-title').addEventListener('click', () => switchConversation(conv.id));
         item.querySelector('.conv-delete').addEventListener('click', (e) => {
@@ -167,9 +174,9 @@ function makeMessageActions(index) {
     const div = document.createElement('div');
     div.className = 'message-actions';
     div.innerHTML = `
-        <button class="message-action-btn" title="Copy">&#128203; Copy</button>
-        <button class="message-action-btn" title="Save">&#128190; Save</button>
-        <button class="message-action-btn" title="Export">&#128229; Export</button>
+        <button class="message-action-btn" title="Copy message to clipboard">&#128203; Copy</button>
+        <button class="message-action-btn" title="Save message to collection">&#128190; Save</button>
+        <button class="message-action-btn" title="Export message as a markdown file">&#128229; Export</button>
     `;
     const [copyBtn, saveBtn, exportMsgBtn] = div.querySelectorAll('button');
     copyBtn.onclick = () => copyMessage(index);
@@ -193,11 +200,12 @@ function addUserMessage(content, scroll = true, index = null) {
     let html = '<div class="label">You</div>';
 
     if (Array.isArray(content)) {
-        const fileBlock = content.find(b => b.type === 'text' && b._isFile);
+        const fileBlocks = content.filter(b => b.type === 'text' && b._isFile);
         const textBlock = content.find(b => b.type === 'text' && !b._isFile);
-        if (fileBlock) {
-            html += `<div class="attachment-badge">&#128206; ${fileBlock._fileName}</div><br>`;
-        }
+        fileBlocks.forEach(fb => {
+            html += `<div class="attachment-badge">&#128206; ${fb._fileName}</div>`;
+        });
+        if (fileBlocks.length > 0) { html += '<br>'; }
         if (textBlock) {
             html += textBlock.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
         }
@@ -258,6 +266,7 @@ function addCodeActions() {
         const copyBtn = document.createElement('button');
         copyBtn.className = 'code-action-btn';
         copyBtn.textContent = 'Copy';
+        copyBtn.title = 'Copy code to clipboard';
         copyBtn.onclick = () => {
             navigator.clipboard.writeText(pre.querySelector('code').textContent);
             copyBtn.textContent = 'Copied!';
@@ -364,41 +373,95 @@ function showSavedMessages() {
     const existing = document.getElementById('saved-msgs-modal');
     if (existing) { existing.remove(); }
 
-    const listHtml = !state.savedMessages || state.savedMessages.length === 0
-        ? '<p style="text-align:center;color:#666;padding:20px;">No saved messages yet.</p>'
-        : state.savedMessages.map(s => `
-            <div style="border:1px solid #3c3c3c;border-radius:6px;padding:14px;margin-bottom:10px;background:#1e1e1e;">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-                    <strong style="color:#d4d4d4;font-size:13px;">${s.title}</strong>
-                    <span style="font-size:11px;color:#666;">${new Date(s.savedAt).toLocaleDateString()}</span>
-                </div>
-                <div style="margin-bottom:8px;">
-                    <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${s.role === 'user' ? '#0e4f8b' : '#2d2d2d'};color:${s.role === 'user' ? '#fff' : '#aaa'};border:1px solid #3c3c3c;">
-                        ${s.role === 'user' ? 'You' : 'Claude'}
-                    </span>
-                    ${s.tags.map(t => `<span style="font-size:11px;padding:2px 8px;border-radius:10px;background:#2d2d2d;color:#888;margin-left:4px;">${t}</span>`).join('')}
-                </div>
-                <div style="display:flex;gap:6px;">
-                    <button onclick="viewSavedMessage('${s.id}')" style="background:#3c3c3c;border:1px solid #555;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">View</button>
-                    <button onclick="copySavedMessage('${s.id}')" style="background:#3c3c3c;border:1px solid #555;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Copy</button>
-                    <button onclick="deleteSavedMessage('${s.id}')" style="background:#3c3c3c;border:1px solid #555;color:#f48771;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Delete</button>
-                </div>
-            </div>`).join('');
-
     const div = document.createElement('div');
     div.id = 'saved-msgs-modal';
     div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;display:flex;align-items:center;justify-content:center;';
-    div.innerHTML = `
-        <div style="background:#252526;border:1px solid #3c3c3c;border-radius:10px;padding:24px;width:600px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;gap:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <h3 style="font-size:14px;color:#fff;">&#128190; Saved Messages</h3>
-                <button id="close-saved-msgs-btn" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;">&#215;</button>
-            </div>
-            <div style="overflow-y:auto;max-height:65vh;">${listHtml}</div>
-        </div>`;
 
+    const inner = document.createElement('div');
+    inner.style.cssText = 'background:#252526;border:1px solid #3c3c3c;border-radius:10px;padding:24px;width:600px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;gap:12px;';
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+    header.innerHTML = '<h3 style="font-size:14px;color:#fff;">&#128190; Saved Messages</h3>';
+    const closeBtn = document.createElement('button');
+    closeBtn.style.cssText = 'background:none;border:none;color:#888;font-size:18px;cursor:pointer;';
+    closeBtn.innerHTML = '&#215;';
+    closeBtn.title = 'Close saved messages';
+    closeBtn.addEventListener('click', closeSavedMessages);
+    header.appendChild(closeBtn);
+    inner.appendChild(header);
+
+    // List
+    const listEl = document.createElement('div');
+    listEl.style.cssText = 'overflow-y:auto;max-height:65vh;';
+
+    if (!state.savedMessages || state.savedMessages.length === 0) {
+        listEl.innerHTML = '<p style="text-align:center;color:#666;padding:20px;">No saved messages yet.</p>';
+    } else {
+        state.savedMessages.forEach(s => {
+            const card = document.createElement('div');
+            card.style.cssText = 'border:1px solid #3c3c3c;border-radius:6px;padding:14px;margin-bottom:10px;background:#1e1e1e;';
+
+            // Title row
+            const titleRow = document.createElement('div');
+            titleRow.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;';
+            titleRow.innerHTML = '<strong style="color:#d4d4d4;font-size:13px;">' + s.title.replace(/</g,'&lt;') + '</strong>'
+                + '<span style="font-size:11px;color:#666;">' + new Date(s.savedAt).toLocaleDateString() + '</span>';
+            card.appendChild(titleRow);
+
+            // Tags row
+            const tagsRow = document.createElement('div');
+            tagsRow.style.cssText = 'margin-bottom:8px;';
+            const roleBadge = document.createElement('span');
+            roleBadge.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:4px;'
+                + 'background:' + (s.role === 'user' ? '#0e4f8b' : '#2d2d2d') + ';'
+                + 'color:' + (s.role === 'user' ? '#fff' : '#aaa') + ';'
+                + 'border:1px solid #3c3c3c;';
+            roleBadge.textContent = s.role === 'user' ? 'You' : 'Claude';
+            tagsRow.appendChild(roleBadge);
+            (s.tags || []).forEach(t => {
+                const tag = document.createElement('span');
+                tag.style.cssText = 'font-size:11px;padding:2px 8px;border-radius:10px;background:#2d2d2d;color:#888;margin-left:4px;';
+                tag.textContent = t;
+                tagsRow.appendChild(tag);
+            });
+            card.appendChild(tagsRow);
+
+            // Action buttons — bound with addEventListener, not inline onclick
+            const btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;gap:6px;';
+
+            const viewBtn = document.createElement('button');
+            viewBtn.style.cssText = 'background:#3c3c3c;border:1px solid #555;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;';
+            viewBtn.textContent = 'View';
+            viewBtn.title = 'View full saved message';
+            viewBtn.addEventListener('click', () => viewSavedMessage(s.id));
+
+            const copyBtn = document.createElement('button');
+            copyBtn.style.cssText = 'background:#3c3c3c;border:1px solid #555;color:#ccc;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;';
+            copyBtn.textContent = 'Copy';
+            copyBtn.title = 'Copy saved message to clipboard';
+            copyBtn.addEventListener('click', () => copySavedMessage(s.id));
+
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = 'background:#3c3c3c;border:1px solid #555;color:#f48771;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;';
+            delBtn.textContent = 'Delete';
+            delBtn.title = 'Permanently delete this saved message';
+            delBtn.addEventListener('click', () => deleteSavedMessage(s.id));
+
+            btnRow.appendChild(viewBtn);
+            btnRow.appendChild(copyBtn);
+            btnRow.appendChild(delBtn);
+            card.appendChild(btnRow);
+
+            listEl.appendChild(card);
+        });
+    }
+
+    inner.appendChild(listEl);
+    div.appendChild(inner);
     document.body.appendChild(div);
-    document.getElementById('close-saved-msgs-btn').onclick = closeSavedMessages;
 }
 
 function closeSavedMessages() {
@@ -496,8 +559,10 @@ async function analyzeError() {
     closeErrorModal();
 
     let prompt = `Please analyze this error and help me understand what's causing it:\n\n\`\`\`\n${errorText}\n\`\`\`\n\n`;
-    if (state.attachment) {
-        prompt += `The error is related to this code:\n\n\`\`\`${detectLanguage(state.attachment.fileName)}\n${state.attachment.content}\n\`\`\`\n\n`;
+    if (state.attachments.length > 0) {
+        state.attachments.forEach(f => {
+            prompt += `The error is related to this code:\n\n\`\`\`${detectLanguage(f.fileName)}\n${f.content}\n\`\`\`\n\n`;
+        });
     }
     prompt += `Please explain:\n1. What this error means\n2. What's likely causing it\n3. How to fix it\n4. Any best practices to prevent this error in the future`;
 
@@ -509,7 +574,7 @@ async function analyzeError() {
 // ── Send ──────────────────────────────────────────────────────────────────────
 async function sendMessage() {
     const text = inputEl.value.trim();
-    if (!text && !state.attachment) { return; }
+    if (!text && state.attachments.length === 0) { return; }
 
     const conv = getActiveConversation();
     if (!conv) { return; }
@@ -520,17 +585,15 @@ async function sendMessage() {
 
     let userContent;
 
-    if (state.attachment) {
-        userContent = [
-            {
-                type: 'text',
-                text: `File: ${state.attachment.fileName}\n\n${state.attachment.content}`,
-                _isFile: true,
-                _fileName: state.attachment.fileName
-            },
-            { type: 'text', text: text || 'Please review this file.' }
-        ];
-        clearAttachment();
+    if (state.attachments.length > 0) {
+        userContent = state.attachments.map(f => ({
+            type: 'text',
+            text: `File: ${f.fileName}\n\n${f.content}`,
+            _isFile: true,
+            _fileName: f.fileName
+        }));
+        userContent.push({ type: 'text', text: text || 'Please review these files.' });
+        clearAttachments();
     } else {
         userContent = text;
     }
@@ -567,6 +630,7 @@ async function sendMessage() {
         sendBtn.disabled = false;
         saveState();
         renderSidebar();
+        checkAutoTrigger(conv);
     });
 
     window.cowork.onError(err => {
@@ -585,22 +649,44 @@ async function sendMessage() {
 }
 
 // ── Attachments ───────────────────────────────────────────────────────────────
-function clearAttachment() {
-    state.attachment = null;
-    attachmentPreview.classList.remove('visible');
-    attachmentName.textContent = '';
+function renderAttachmentPreview() {
+    attachmentPreview.innerHTML = '';
+    if (state.attachments.length === 0) {
+        attachmentPreview.classList.remove('visible');
+        return;
+    }
+    attachmentPreview.classList.add('visible');
+    state.attachments.forEach((file, i) => {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#3c3c3c;border:1px solid #555;border-radius:4px;padding:2px 8px;font-size:11px;color:#d4d4d4;';
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = '📎 ' + file.fileName;
+        const removeBtn = document.createElement('button');
+        removeBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.title = 'Remove ' + file.fileName;
+        removeBtn.addEventListener('click', () => {
+            state.attachments.splice(i, 1);
+            renderAttachmentPreview();
+        });
+        badge.appendChild(nameSpan);
+        badge.appendChild(removeBtn);
+        attachmentPreview.appendChild(badge);
+    });
+}
+
+function clearAttachments() {
+    state.attachments = [];
+    renderAttachmentPreview();
 }
 
 attachBtn.addEventListener('click', async () => {
-    const file = await window.cowork.openFile();
-    if (file) {
-        state.attachment = file;
-        attachmentName.textContent = file.fileName;
-        attachmentPreview.classList.add('visible');
+    const files = await window.cowork.openFile();
+    if (files && files.length > 0) {
+        state.attachments.push(...files);
+        renderAttachmentPreview();
     }
 });
-
-removeAttachment.addEventListener('click', clearAttachment);
 
 // ── Paste as code ─────────────────────────────────────────────────────────────
 pasteBtn.addEventListener('click', async () => {
@@ -664,13 +750,17 @@ async function compactConversation() {
             messages: conv.messages,
             title: conv.title
         });
+        const ts = Date.now().toString();
         const blob = new Blob([result], { type: "text/markdown" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "cowork-compact-" + conv.title.replace(/[^a-z0-9]/gi, "_") + "-" + Date.now() + ".md";
+        a.download = "cowork-compact-" + conv.title.replace(/[^a-z0-9]/gi, "_") + "-" + ts + ".md";
         a.click();
         URL.revokeObjectURL(url);
+        // Save briefing for diff mode (fire-and-forget, non-blocking)
+        window.cowork.saveBriefing({ content: result, title: conv.title, timestamp: ts })
+            .catch(err => console.error("Failed to save briefing for diff:", err));
         showToast("Conversation compacted and saved!");
     } catch (err) {
         showToast("Compact failed: " + err.message);
@@ -720,6 +810,48 @@ clearBtn.addEventListener('click', () => {
 // ── System prompt modal ───────────────────────────────────────────────────────
 settingsBtn.addEventListener('click', () => {
     systemPromptInput.value = state.systemPrompt;
+
+    // Inject auto-trigger controls if not already present
+    if (!document.getElementById('autotrigger-section')) {
+        const section = document.createElement('div');
+        section.id = 'autotrigger-section';
+        section.style.cssText = 'border-top:1px solid #3c3c3c;padding-top:14px;display:flex;flex-direction:column;gap:10px;';
+        section.innerHTML = [
+            '<div style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:0.05em;">AUTO-TRIGGER COMPACTION</div>',
+            '<div style="display:flex;align-items:center;gap:10px;">',
+                '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#d4d4d4;">',
+                    '<input type="checkbox" id="at-enabled" style="accent-color:#0e7fd4;width:14px;height:14px;">',
+                    'Enable auto-trigger',
+                '</label>',
+            '</div>',
+            '<div style="display:flex;align-items:center;gap:10px;">',
+                '<label style="font-size:13px;color:#d4d4d4;white-space:nowrap;">Threshold (messages):</label>',
+                '<input type="number" id="at-threshold" min="10" max="200" step="5"',
+                    'style="width:70px;background:#3c3c3c;border:1px solid #555;border-radius:6px;',
+                    'color:#d4d4d4;font-size:13px;padding:5px 8px;outline:none;">',
+            '</div>',
+            '<div style="display:flex;align-items:center;gap:10px;">',
+                '<label style="font-size:13px;color:#d4d4d4;white-space:nowrap;">When triggered:</label>',
+                '<select id="at-behavior"',
+                    'style="background:#3c3c3c;border:1px solid #555;border-radius:6px;',
+                    'color:#d4d4d4;font-size:13px;padding:5px 8px;outline:none;cursor:pointer;">',
+                    '<option value="confirm">Ask before compacting</option>',
+                    '<option value="silent">Compact silently</option>',
+                '</select>',
+            '</div>'
+        ].join('');
+
+        // Insert before the modal button row (last child)
+        const modalContent = systemPromptInput.closest('div') || modalOverlay.querySelector('div');
+        const buttonRow = modalOverlay.querySelector('div > div:last-child') || modalSave.parentElement;
+        buttonRow.parentElement.insertBefore(section, buttonRow);
+    }
+
+    // Populate controls from state
+    document.getElementById('at-enabled').checked = state.autoTrigger.enabled;
+    document.getElementById('at-threshold').value = state.autoTrigger.threshold;
+    document.getElementById('at-behavior').value = state.autoTrigger.confirm ? 'confirm' : 'silent';
+
     modalOverlay.classList.add('visible');
 });
 
@@ -729,6 +861,20 @@ modalCancel.addEventListener('click', () => {
 
 modalSave.addEventListener('click', () => {
     state.systemPrompt = systemPromptInput.value.trim() || DEFAULT_SYSTEM_PROMPT;
+
+    // Read auto-trigger settings if the controls were injected
+    const atEnabled = document.getElementById('at-enabled');
+    const atThreshold = document.getElementById('at-threshold');
+    const atBehavior = document.getElementById('at-behavior');
+    if (atEnabled && atThreshold && atBehavior) {
+        const threshold = parseInt(atThreshold.value, 10);
+        state.autoTrigger = {
+            enabled: atEnabled.checked,
+            threshold: isNaN(threshold) || threshold < 10 ? 50 : threshold,
+            confirm: atBehavior.value === 'confirm'
+        };
+    }
+
     modalOverlay.classList.remove('visible');
     saveState();
 });
@@ -782,6 +928,13 @@ async function initApiKey() {
     }
 }
 
+function showApiKeyModal() {
+    apiKeyInput.value = '';
+    apiKeyInput.style.borderColor = '#555';
+    apiModalOverlay.style.display = 'flex';
+    setTimeout(() => apiKeyInput.focus(), 50);
+}
+
 apiKeySave.addEventListener('click', async () => {
     const key = apiKeyInput.value.trim();
     if (key.startsWith('sk-ant-')) {
@@ -797,6 +950,360 @@ apiKeyInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { apiKeySave.click(); }
 });
 
+// ── Diff Mode ────────────────────────────────────────────────────────────────
+
+/**
+ * LCS-based line diff.
+ * Returns array of {type: 'same'|'add'|'remove', text: string}.
+ */
+function diffLines(oldLines, newLines) {
+    const m = oldLines.length;
+    const n = newLines.length;
+    // Build LCS table
+    const dp = [];
+    for (let i = 0; i <= m; i++) {
+        dp[i] = new Array(n + 1).fill(0);
+    }
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            if (oldLines[i - 1] === newLines[j - 1]) {
+                dp[i][j] = dp[i - 1][j - 1] + 1;
+            } else {
+                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+            }
+        }
+    }
+    // Backtrack
+    const result = [];
+    let i = m, j = n;
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+            result.unshift({ type: 'same', text: oldLines[i - 1] });
+            i--; j--;
+        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+            result.unshift({ type: 'add', text: newLines[j - 1] });
+            j--;
+        } else {
+            result.unshift({ type: 'remove', text: oldLines[i - 1] });
+            i--;
+        }
+    }
+    return result;
+}
+
+/**
+ * Parse a briefing into sections keyed by heading text.
+ * Sections are split on ## headings. Content before the first ## goes into '__preamble__'.
+ */
+function parseBriefingSections(content) {
+    const sections = {};
+    const lines = content.split('');
+    let current = '__preamble__';
+    let buffer = [];
+    for (const line of lines) {
+        if (line.startsWith('## ')) {
+            sections[current] = buffer.join('').trim();
+            current = line.slice(3).trim();
+            buffer = [];
+        } else {
+            buffer.push(line);
+        }
+    }
+    sections[current] = buffer.join('').trim();
+    return sections;
+}
+
+/**
+ * Render a line diff array as HTML with colored lines.
+ */
+function renderLineDiff(diffResult) {
+    if (diffResult.every(d => d.type === 'same')) {
+        return '<div style="color:#666;font-style:italic;padding:6px 0;">No changes in this section.</div>';
+    }
+    return diffResult.map(d => {
+        const escaped = d.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') || '&nbsp;';
+        if (d.type === 'add') {
+            return '<div style="background:#1a3a1a;color:#89d185;padding:1px 8px;white-space:pre-wrap;font-family:monospace;font-size:12px;">+ ' + escaped + '</div>';
+        } else if (d.type === 'remove') {
+            return '<div style="background:#3a1a1a;color:#f48771;padding:1px 8px;white-space:pre-wrap;font-family:monospace;font-size:12px;text-decoration:line-through;">- ' + escaped + '</div>';
+        } else {
+            return '<div style="color:#888;padding:1px 8px;white-space:pre-wrap;font-family:monospace;font-size:12px;">&nbsp;&nbsp;' + escaped + '</div>';
+        }
+    }).join('');
+}
+
+async function showDiffModal() {
+    const existing = document.getElementById('diff-modal');
+    if (existing) { existing.remove(); }
+
+    let briefings = [];
+    try {
+        briefings = await window.cowork.listBriefings();
+    } catch (err) {
+        showToast('Could not load briefings: ' + err.message);
+        return;
+    }
+
+    if (briefings.length < 2) {
+        showToast('Need at least 2 saved briefings to diff. Run Compact on a conversation first.');
+        return;
+    }
+
+    function formatLabel(b) {
+        const d = new Date(parseInt(b.timestamp));
+        const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return b.title + ' — ' + dateStr;
+    }
+
+    const optionsHtml = briefings.map((b, i) =>
+        '<option value="' + i + '">' + formatLabel(b).replace(/"/g, '&quot;') + '</option>'
+    ).join('');
+
+    const div = document.createElement('div');
+    div.id = 'diff-modal';
+    div.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:300;display:flex;align-items:center;justify-content:center;';
+    div.innerHTML = [
+        '<div style="background:#252526;border:1px solid #3c3c3c;border-radius:10px;padding:24px;width:860px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;gap:14px;">',
+            '<div style="display:flex;justify-content:space-between;align-items:center;">',
+                '<h3 style="font-size:14px;color:#fff;">&#9141; Diff Briefings</h3>',
+                '<button id="close-diff-modal-btn" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;">&#215;</button>',
+            '</div>',
+            '<div style="display:flex;gap:12px;align-items:flex-end;">',
+                '<div style="flex:1;">',
+                    '<div style="font-size:11px;color:#888;margin-bottom:4px;">Older (A)</div>',
+                    '<select id="diff-select-a" style="width:100%;background:#3c3c3c;border:1px solid #555;border-radius:6px;color:#d4d4d4;font-size:12px;padding:6px 10px;">',
+                        optionsHtml,
+                    '</select>',
+                '</div>',
+                '<div style="flex:1;">',
+                    '<div style="font-size:11px;color:#888;margin-bottom:4px;">Newer (B)</div>',
+                    '<select id="diff-select-b" style="width:100%;background:#3c3c3c;border:1px solid #555;border-radius:6px;color:#d4d4d4;font-size:12px;padding:6px 10px;">',
+                        optionsHtml,
+                    '</select>',
+                '</div>',
+                '<button id="run-diff-btn" style="background:#0e7fd4;border:none;color:#fff;padding:7px 18px;border-radius:6px;cursor:pointer;font-size:13px;white-space:nowrap;">Compare</button>',
+            '</div>',
+            '<div id="diff-output" style="overflow-y:auto;flex:1;min-height:200px;max-height:65vh;background:#1e1e1e;border-radius:6px;padding:12px;">',
+                '<div style="color:#555;text-align:center;padding:40px 0;font-size:13px;">Select two briefings and click Compare.</div>',
+            '</div>',
+            '<div style="display:flex;gap:12px;font-size:11px;color:#666;align-items:center;">',
+                '<span style="background:#1a3a1a;color:#89d185;padding:2px 8px;border-radius:3px;font-family:monospace;">+ added</span>',
+                '<span style="background:#3a1a1a;color:#f48771;padding:2px 8px;border-radius:3px;font-family:monospace;text-decoration:line-through;">- removed</span>',
+                '<span style="color:#888;padding:2px 8px;">unchanged</span>',
+            '</div>',
+        '</div>'
+    ].join('');
+
+    document.body.appendChild(div);
+
+    // Default selects: A = index 1 (older), B = index 0 (newest)
+    document.getElementById('diff-select-a').value = '1';
+    document.getElementById('diff-select-b').value = '0';
+
+    document.getElementById('close-diff-modal-btn').onclick = () => div.remove();
+    div.addEventListener('click', e => { if (e.target === div) div.remove(); });
+
+    document.getElementById('run-diff-btn').addEventListener('click', async () => {
+        const idxA = parseInt(document.getElementById('diff-select-a').value);
+        const idxB = parseInt(document.getElementById('diff-select-b').value);
+
+        if (idxA === idxB) {
+            showToast('Select two different briefings to compare.');
+            return;
+        }
+
+        const btn = document.getElementById('run-diff-btn');
+        btn.textContent = 'Loading...';
+        btn.disabled = true;
+
+        const outputEl = document.getElementById('diff-output');
+        outputEl.innerHTML = '<div style="color:#555;text-align:center;padding:40px 0;font-size:13px;">Computing diff...</div>';
+
+        try {
+            const [contentA, contentB] = await Promise.all([
+                window.cowork.loadBriefing({ filename: briefings[idxA].filename }),
+                window.cowork.loadBriefing({ filename: briefings[idxB].filename })
+            ]);
+
+            const sectionsA = parseBriefingSections(contentA);
+            const sectionsB = parseBriefingSections(contentB);
+
+            // Union of all section headings, preserving order from B then any A-only sections
+            const seen = new Set();
+            const allSections = [];
+            for (const k of Object.keys(sectionsB)) { if (k !== '__preamble__') { seen.add(k); allSections.push(k); } }
+            for (const k of Object.keys(sectionsA)) { if (k !== '__preamble__' && !seen.has(k)) { allSections.push(k); } }
+
+            if (allSections.length === 0) {
+                outputEl.innerHTML = '<div style="color:#f48771;text-align:center;padding:20px;">Could not parse sections. Are these valid compact briefings?</div>';
+                return;
+            }
+
+            let html = '';
+            let changedSections = 0;
+
+            for (const section of allSections) {
+                const textA = sectionsA[section] || '';
+                const textB = sectionsB[section] || '';
+                const linesA = textA.split('');
+                const linesB = textB.split('');
+                const diff = diffLines(linesA, linesB);
+                const hasChanges = diff.some(d => d.type !== 'same');
+                if (hasChanges) changedSections++;
+
+                html += [
+                    '<div style="margin-bottom:16px;">',
+                        '<div style="font-size:12px;font-weight:600;color:' + (hasChanges ? '#d4d4d4' : '#555') + ';',
+                            'border-bottom:1px solid ' + (hasChanges ? '#3c3c3c' : '#2a2a2a') + ';',
+                            'padding-bottom:4px;margin-bottom:6px;">',
+                            '## ' + section + (hasChanges ? '' : ' <span style="font-weight:normal;color:#444;">(unchanged)</span>'),
+                        '</div>',
+                        '<div>' + renderLineDiff(diff) + '</div>',
+                    '</div>'
+                ].join('');
+            }
+
+            // Summary bar at top
+            const summaryColor = changedSections > 0 ? '#d4d4d4' : '#666';
+            const summary = '<div style="font-size:12px;color:' + summaryColor + ';background:#2a2a2a;border-radius:4px;padding:8px 12px;margin-bottom:16px;">'
+                + (changedSections === 0
+                    ? '&#10003; No differences found between these two briefings.'
+                    : changedSections + ' of ' + allSections.length + ' section(s) changed between A and B.')
+                + '</div>';
+
+            outputEl.innerHTML = summary + html;
+
+        } catch (err) {
+            outputEl.innerHTML = '<div style="color:#f48771;padding:20px;">Error: ' + err.message + '</div>';
+        } finally {
+            btn.textContent = 'Compare';
+            btn.disabled = false;
+        }
+    });
+}
+
+// ── Auto-trigger compaction ──────────────────────────────────────────────────
+
+function checkAutoTrigger(conv) {
+    if (!state.autoTrigger.enabled) { return; }
+    if (!conv || conv.messages.length < state.autoTrigger.threshold) { return; }
+
+    if (state.autoTrigger.confirm) {
+        showAutoTriggerPrompt(conv);
+    } else {
+        runAutoCompact(conv);
+    }
+}
+
+function showAutoTriggerPrompt(conv) {
+    // Don't stack prompts
+    if (document.getElementById('autotrigger-prompt')) { return; }
+
+    const div = document.createElement('div');
+    div.id = 'autotrigger-prompt';
+    div.style.cssText = [
+        'position:fixed;bottom:80px;right:20px;',
+        'background:#252526;border:1px solid #0e7fd4;border-radius:8px;',
+        'padding:16px 18px;width:320px;z-index:400;',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.5);'
+    ].join('');
+    div.innerHTML = [
+        '<div style="font-size:13px;color:#d4d4d4;margin-bottom:10px;">',
+            '<strong style="color:#fff;">Auto-compact ready</strong><br>',
+            'This conversation has reached ' + conv.messages.length + ' messages. ',
+            'Compact now to reduce API costs?',
+        '</div>',
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">',
+            '<button id="at-dismiss-btn"',
+                'style="background:#3c3c3c;border:none;color:#ccc;padding:5px 14px;',
+                'border-radius:5px;cursor:pointer;font-size:12px;">Not now</button>',
+            '<button id="at-compact-btn"',
+                'style="background:#0e7fd4;border:none;color:#fff;padding:5px 14px;',
+                'border-radius:5px;cursor:pointer;font-size:12px;">Compact</button>',
+        '</div>'
+    ].join('');
+
+    document.body.appendChild(div);
+
+    document.getElementById('at-dismiss-btn').title = 'Skip auto-compaction this time';
+    document.getElementById('at-dismiss-btn').onclick = () => div.remove();
+    document.getElementById('at-compact-btn').title = 'Compact conversation now and clear history';
+    document.getElementById('at-compact-btn').onclick = () => {
+        div.remove();
+        runAutoCompact(conv);
+    };
+
+    // Auto-dismiss after 30 seconds if ignored
+    setTimeout(() => { if (div.parentElement) { div.remove(); } }, 30000);
+}
+
+async function runAutoCompact(conv) {
+    const compactBtn = document.getElementById('compact-btn');
+    if (compactBtn) { compactBtn.textContent = 'Compacting...'; compactBtn.disabled = true; }
+
+    try {
+        const result = await window.cowork.compactConversation({
+            messages: conv.messages,
+            title: conv.title
+        });
+
+        const ts = Date.now().toString();
+        const blob = new Blob([result], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'cowork-compact-' + conv.title.replace(/[^a-z0-9]/gi, '_') + '-' + ts + '.md';
+        a.click();
+        URL.revokeObjectURL(url);
+
+        window.cowork.saveBriefing({ content: result, title: conv.title, timestamp: ts })
+            .catch(err => console.error('Failed to save briefing for diff:', err));
+
+        // Clear the conversation history after compacting
+        conv.messages = [];
+        conv.title = 'New Chat';
+        conv.lastUpdated = Date.now();
+        saveState();
+        renderSidebar();
+        renderMessages();
+
+        showToast('Auto-compacted! Briefing downloaded, history cleared.');
+    } catch (err) {
+        showToast('Auto-compact failed: ' + err.message);
+        console.error('Auto-compact error:', err);
+    } finally {
+        if (compactBtn) { compactBtn.textContent = 'Compact'; compactBtn.disabled = false; }
+    }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+
+// Inject Diff Briefings button into sidebar next to Scan Project
+(function injectDiffButton() {
+    const scanBtn = document.getElementById('scan-project-btn');
+    if (!scanBtn) { return; }
+    const btn = document.createElement('button');
+    btn.id = 'diff-briefings-btn';
+    btn.innerHTML = '&#9141; Diff Briefings';
+    btn.title = 'Compare two saved briefings to see what changed';
+    btn.className = scanBtn.className;
+    btn.style.cssText = scanBtn.style.cssText;
+    scanBtn.parentNode.insertBefore(btn, scanBtn.nextSibling);
+    btn.addEventListener('click', showDiffModal);
+})();
+
+(function injectApiKeyButton() {
+    const scanBtn = document.getElementById('scan-project-btn');
+    if (!scanBtn) { return; }
+    const btn = document.createElement('button');
+    btn.id = 'change-api-key-btn';
+    btn.innerHTML = '&#128273; API Key';
+    btn.title = 'Change your Anthropic API key';
+    btn.className = scanBtn.className;
+    btn.style.cssText = scanBtn.style.cssText;
+    scanBtn.parentNode.appendChild(btn);
+    btn.addEventListener('click', showApiKeyModal);
+})();
+
 loadState();
 initApiKey();

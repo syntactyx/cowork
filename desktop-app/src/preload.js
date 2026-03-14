@@ -13,5 +13,8 @@ contextBridge.exposeInMainWorld("cowork", {
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
     compactConversation: (payload) => ipcRenderer.invoke("compact-conversation", payload),
     openFolder: () => ipcRenderer.invoke("open-folder"),
-    scanProject: (payload) => ipcRenderer.invoke("scan-project", payload)
+    scanProject: (payload) => ipcRenderer.invoke("scan-project", payload),
+    saveBriefing: (payload) => ipcRenderer.invoke("save-briefing", payload),
+    listBriefings: () => ipcRenderer.invoke("list-briefings"),
+    loadBriefing: (payload) => ipcRenderer.invoke("load-briefing", payload)
 });

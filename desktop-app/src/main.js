@@ -87,7 +87,7 @@ ipcMain.handle("send-message", async (event, { messages, systemPrompt, model }) 
     }
     try {
         const stream = await anthropicClient.messages.stream({
-            model: model || "claude-opus-4-20250514",
+            model: model || "claude-opus-4-6",
             max_tokens: 8192,
             system: systemPrompt,
             messages
@@ -105,17 +105,18 @@ ipcMain.handle("send-message", async (event, { messages, systemPrompt, model }) 
 
 ipcMain.handle("open-file", async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
-        properties: ["openFile"],
+        properties: ["openFile", "multiSelections"],
         filters: [
             { name: "Text Files", extensions: ["txt", "md", "js", "ts", "py", "json", "html", "css"] },
             { name: "All Files", extensions: ["*"] }
         ]
     });
     if (!result.canceled && result.filePaths.length > 0) {
-        const filePath = result.filePaths[0];
-        const content = fs.readFileSync(filePath, "utf-8");
-        const fileName = path.basename(filePath);
-        return { fileName, content };
+        return result.filePaths.map(filePath => {
+            const content = fs.readFileSync(filePath, "utf-8");
+            const fileName = path.basename(filePath);
+            return { fileName, content };
+        });
     }
     return null;
 });
@@ -196,7 +197,7 @@ ipcMain.handle("scan-project", async (event, { folderPath }) => {
     const userMsg = "Project: " + folderName + String.fromCharCode(10) + String.fromCharCode(10) + "Files:" + String.fromCharCode(10) + String.fromCharCode(10) + projectText;
 
     const response = await anthropicClient.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-opus-4-6",
         max_tokens: 8192,
         system: sysPrompt,
         messages: [{ role: "user", content: userMsg }]
@@ -207,6 +208,19 @@ ipcMain.handle("scan-project", async (event, { folderPath }) => {
 ipcMain.handle("compact-conversation", async (event, { messages, title }) => {
     if (!anthropicClient) { throw new Error("No API key set."); }
     var NL = String.fromCharCode(10);
+
+    // Build meta block in main.js so Claude doesn't have to infer it
+    const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+    const messageCount = messages.length;
+    const metaBlock = [
+        "## Meta",
+        "| Field | Value |",
+        "|---|---|",
+        "| Compacted | " + timestamp + " |",
+        "| Conversation | " + title + " |",
+        "| Messages | " + messageCount + " |"
+    ].join(NL);
+
     const conversationText = messages.map(function(m) {
         const role = m.role === "user" ? "USER" : "CLAUDE";
         let content = m.content;
@@ -215,13 +229,86 @@ ipcMain.handle("compact-conversation", async (event, { messages, title }) => {
         }
         return role + ": " + content;
     }).join(NL + NL);
-    const sysPrompt = "You are a technical documentation assistant. Read the following conversation and produce a single dense structured markdown document to prime a future Claude instance with full context. Include: project overview and current state, all key decisions made and why, all code written with file paths, architecture and data flow, known issues and bugs, immediate next steps, and important developer gotchas. Be thorough but concise. Optimize for information density.";
+
+    const sysPrompt = [
+        "You are a technical documentation assistant. Read the following conversation and produce a structured markdown briefing that primes a future Claude instance with full context.",
+        "",
+        "You MUST output exactly these sections in this order, using these exact headings:",
+        "",
+        "## Executive Summary",
+        "2-4 sentences. What is this project, what was accomplished in this conversation, and what is the current state?",
+        "",
+        "## Decisions",
+        "A markdown table with columns: Decision | Rationale | Alternatives Rejected",
+        "Every significant technical or design choice made in the conversation gets a row.",
+        "",
+        "## Code Artifacts",
+        "For every distinct file created or modified, output a subsection headed ### path/to/file.ext containing the complete final code in a fenced code block. If the full file was not shown in the conversation, include as much as is known and note what is missing.",
+        "",
+        "## Known Issues",
+        "A checklist using - [ ] for each unresolved bug, limitation, or caveat identified in the conversation.",
+        "",
+        "## Next Steps",
+        "Three subsections:",
+        "### Immediate",
+        "Actions to take in the next session (specific, actionable).",
+        "### Short Term",
+        "Work to do in the next few sessions.",
+        "### Long Term",
+        "Roadmap items and larger goals.",
+        "",
+        "Rules: be thorough but concise. Optimize for information density. Do not add sections beyond those listed. Do not include a Meta section — that is prepended separately."
+    ].join(NL);
+
     const userMsg = "Conversation title: " + title + NL + NL + conversationText;
+
     const response = await anthropicClient.messages.create({
-        model: "claude-opus-4-20250514",
+        model: "claude-opus-4-6",
         max_tokens: 8192,
         system: sysPrompt,
         messages: [{ role: "user", content: userMsg }]
     });
-    return response.content[0].text;
+
+    // Prepend the pre-built meta block above Claude's output
+    const briefing = metaBlock + NL + NL + response.content[0].text;
+    return briefing;
+});
+
+// ── Briefing persistence (diff mode) ─────────────────────────────────────────
+
+function getBriefingsDir() {
+    const dir = path.join(app.getPath("userData"), "briefings");
+    if (!fs.existsSync(dir)) { fs.mkdirSync(dir, { recursive: true }); }
+    return dir;
+}
+
+ipcMain.handle("save-briefing", async (event, { content, title, timestamp }) => {
+    const dir = getBriefingsDir();
+    const safeName = title.replace(/[^a-z0-9]/gi, "-").slice(0, 40);
+    const filename = timestamp + "-" + safeName + ".md";
+    const filePath = path.join(dir, filename);
+    fs.writeFileSync(filePath, content, "utf8");
+
+    const indexPath = path.join(dir, "index.json");
+    let index = [];
+    if (fs.existsSync(indexPath)) {
+        try { index = JSON.parse(fs.readFileSync(indexPath, "utf8")); } catch (e) { index = []; }
+    }
+    index.unshift({ filename, title, timestamp });
+    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2));
+    return filename;
+});
+
+ipcMain.handle("list-briefings", async () => {
+    const dir = getBriefingsDir();
+    const indexPath = path.join(dir, "index.json");
+    if (!fs.existsSync(indexPath)) { return []; }
+    try { return JSON.parse(fs.readFileSync(indexPath, "utf8")); } catch (e) { return []; }
+});
+
+ipcMain.handle("load-briefing", async (event, { filename }) => {
+    const dir = getBriefingsDir();
+    const filePath = path.join(dir, filename);
+    if (!fs.existsSync(filePath)) { throw new Error("Briefing not found: " + filename); }
+    return fs.readFileSync(filePath, "utf8");
 });

@@ -595,25 +595,26 @@
         </div>
         <div id="conversations-list"></div>
         <div id="sidebar-footer">
-            <button id="settings-btn">&#9881; System Prompt</button>
-            <button id="saved-msgs-btn">&#128190; Saved Messages</button>
-            <button id="scan-project-btn" style="width:100%;background:none;border:1px solid #3c3c3c;color:#888;padding:7px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.15s;">&#128269; Scan Project</button>
+            <button id="settings-btn" title="Configure system prompt and auto-trigger settings">&#9881; System Prompt</button>
+            <button id="saved-msgs-btn" title="View and manage your saved message collection">&#128190; Saved Messages</button>
+            <button id="scan-project-btn" title="Scan a project folder and generate a codebase briefing" style="width:100%;background:none;border:1px solid #3c3c3c;color:#888;padding:7px;border-radius:6px;cursor:pointer;font-size:12px;transition:all 0.15s;">&#128269; Scan Project</button>
         </div>
     </div>
 
     <!-- Main -->
     <div id="main">
         <div id="toolbar">
-            <select id="model-select">
+            <select id="model-select" title="Choose which Claude model to use for responses">
+                <option value="claude-opus-4-6">Claude Opus 4.6</option>
                 <option value="claude-opus-4-20250514">Claude Opus 4</option>
                 <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
                 <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
             </select>
             <div id="toolbar-right">
-                <button class="toolbar-btn" id="clear-btn">Clear</button>
-                <button class="toolbar-btn" id="export-btn">Export</button>
+                <button class="toolbar-btn" id="clear-btn" title="Clear all messages in the current conversation">Clear</button>
+                <button class="toolbar-btn" id="export-btn" title="Export conversation as a markdown file">Export</button>
                 <button class="toolbar-btn" id="analyze-error-btn" title="Analyze Error (Ctrl+E)">&#128269; Analyze Error</button>
-                <button class="toolbar-btn" id="compact-btn">&#128220; Compact</button>
+                <button class="toolbar-btn" id="compact-btn" title="Compact conversation into a dense briefing and clear history">&#128220; Compact</button>
             </div>
         </div>
 
@@ -628,13 +629,13 @@
             <div id="attachment-preview">
                 <span>&#128206;</span>
                 <span id="attachment-name"></span>
-                <button id="remove-attachment">&times;</button>
+                <button id="remove-attachment" title="Remove attached file">&times;</button>
             </div>
             <div id="input-row">
-                <button class="input-btn" id="attach-btn" title="Attach file">&#128206;</button>
-                <button class="input-btn" id="paste-btn" title="Paste as code block">&#128203;</button>
+                <button class="input-btn" id="attach-btn" title="Attach a file to your message">&#128206;</button>
+                <button class="input-btn" id="paste-btn" title="Paste clipboard content as a formatted code block">&#128203;</button>
                 <textarea id="input" placeholder="Ask Claude... (Shift+Enter for new line)" rows="1"></textarea>
-                <button id="send-btn">&#8594;</button>
+                <button id="send-btn" title="Send message (Enter)">&#8594;</button>
             </div>
         </div>
     </div>
@@ -646,8 +647,8 @@
             <p>Customize how Claude behaves in this session. This prompt is sent with every message.</p>
             <textarea id="system-prompt-input"></textarea>
             <div id="modal-actions">
-                <button class="modal-btn" id="modal-cancel">Cancel</button>
-                <button class="modal-btn" id="modal-save">Save</button>
+                <button class="modal-btn" id="modal-cancel" title="Cancel changes and close settings">Cancel</button>
+                <button class="modal-btn" id="modal-save" title="Save settings">Save</button>
             </div>
         </div>
     </div>
@@ -657,9 +658,9 @@
         <div style="background:#252526;border:1px solid #3c3c3c;border-radius:10px;padding:24px;width:480px;max-width:90vw;">
             <h2 style="font-size:15px;margin-bottom:8px;color:#fff;">&#128273; Anthropic API Key</h2>
             <p style="font-size:12px;color:#888;margin-bottom:12px;">Enter your Anthropic API key to get started. It will be stored locally on your machine.</p>
-            <input id="api-key-input" type="password" placeholder="sk-ant-..." style="width:100%;background:#3c3c3c;border:1px solid #555;border-radius:6px;color:#d4d4d4;font-size:13px;padding:10px 12px;outline:none;margin-bottom:16px;">
+            <input id="api-key-input" title="Enter your Anthropic API key (starts with sk-ant-)" type="password" placeholder="sk-ant-..." style="width:100%;background:#3c3c3c;border:1px solid #555;border-radius:6px;color:#d4d4d4;font-size:13px;padding:10px 12px;outline:none;margin-bottom:16px;">
             <div style="display:flex;justify-content:flex-end;">
-                <button id="api-key-save" style="background:#0e7fd4;border:none;color:white;padding:7px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Save</button>
+                <button id="api-key-save" title="Save API key and start using Cowork" style="background:#0e7fd4;border:none;color:white;padding:7px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Save</button>
             </div>
         </div>
     </div>
@@ -672,10 +673,10 @@
                 <button onclick="closeErrorModal()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;">&times;</button>
             </h3>
             <p>Paste your error message below. If you have a file attached, it will be included in the analysis.</p>
-            <textarea id="error-input" placeholder="Paste your error message, stack trace, or compiler output here..."></textarea>
+            <textarea id="error-input" title="Paste your error message, stack trace, or compiler output" placeholder="Paste your error message, stack trace, or compiler output here..."></textarea>
             <div id="error-modal-buttons">
-                <button id="error-cancel-btn" onclick="closeErrorModal()">Cancel</button>
-                <button id="error-analyze-btn" onclick="analyzeError()">Analyze with Claude</button>
+                <button id="error-cancel-btn" title="Close without analyzing" onclick="closeErrorModal()">Cancel</button>
+                <button id="error-analyze-btn" title="Send error to Claude for analysis" onclick="analyzeError()">Analyze with Claude</button>
             </div>
         </div>
     </div>
