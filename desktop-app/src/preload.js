@@ -11,5 +11,7 @@ contextBridge.exposeInMainWorld("cowork", {
     onDone: (callback) => ipcRenderer.on("stream-done", () => callback()),
     onError: (callback) => ipcRenderer.on("stream-error", (_, err) => callback(err)),
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
-    compactConversation: (payload) => ipcRenderer.invoke("compact-conversation", payload)
+    compactConversation: (payload) => ipcRenderer.invoke("compact-conversation", payload),
+    openFolder: () => ipcRenderer.invoke("open-folder"),
+    scanProject: (payload) => ipcRenderer.invoke("scan-project", payload)
 });

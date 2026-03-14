@@ -614,6 +614,36 @@ pasteBtn.addEventListener('click', async () => {
     }
 });
 
+// -- Scan Project ------------------------------------------------------------
+async function scanProject() {
+    const folderPath = await window.cowork.openFolder();
+    if (!folderPath) { return; }
+
+    const scanBtn = document.getElementById("scan-project-btn");
+    scanBtn.textContent = "Scanning...";
+    scanBtn.disabled = true;
+
+    try {
+        const { briefing, fileCount, folderName } = await window.cowork.scanProject({ folderPath });
+
+        const blob = new Blob([briefing], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cowork-scan-" + folderName.replace(/[^a-z0-9]/gi, "_") + "-" + Date.now() + ".md";
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Scanned " + fileCount + " files from " + folderName + "!");
+
+    } catch (err) {
+        showToast("Scan failed: " + err.message);
+        console.error("Scan error:", err);
+    } finally {
+        scanBtn.textContent = "Scan Project";
+        scanBtn.disabled = false;
+    }
+}
+
 // -- Compact & Export ---------------------------------------------------------
 async function compactConversation() {
     const conv = getActiveConversation();
@@ -730,6 +760,7 @@ document.addEventListener('keydown', (e) => {
 
 // ── Saved messages button ─────────────────────────────────────────────────────
 document.getElementById('saved-msgs-btn').addEventListener('click', showSavedMessages);
+document.getElementById('scan-project-btn').addEventListener('click', scanProject);
 document.getElementById('compact-btn').addEventListener('click', compactConversation);
 
 // ── API Key ───────────────────────────────────────────────────────────────────

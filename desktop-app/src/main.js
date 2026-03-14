@@ -115,6 +115,77 @@ ipcMain.handle("load-conversations", async () => {
     return null;
 });
 
+
+ipcMain.handle("open-folder", async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ["openDirectory"],
+        title: "Select Project Folder"
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths[0];
+    }
+    return null;
+});
+
+ipcMain.handle("scan-project", async (event, { folderPath }) => {
+    if (!anthropicClient) { throw new Error("No API key set."); }
+
+    const EXTENSIONS = [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json", ".md", ".py", ".txt"];
+    const SKIP_DIRS = ["node_modules", "dist", ".git", "out", ".api_venv", "__pycache__"];
+    const SKIP_FILES = ["package-lock.json", "yarn.lock", "fix-pkg.js", "fix-pkg2.js", "fix-renderer.js", "fix-send.js", "fix-compact-btn.js", "patch-html.js", "patch-main.js", "patch-main2.js", "patch-preload.js", "patch-renderer.js", "write-main.js", "build-scan.js", "check-scan.js", "add-api-modal.js", "add-api-key-logic.js"];
+
+    function readDirRecursive(dir) {
+        const results = [];
+        let entries;
+        try { entries = fs.readdirSync(dir); } catch (e) { return results; }
+        for (const entry of entries) {
+            if (SKIP_DIRS.includes(entry)) { continue; }
+            const fullPath = path.join(dir, entry);
+            let stat;
+            try { stat = fs.statSync(fullPath); } catch (e) { continue; }
+            if (stat.isDirectory()) {
+                results.push(...readDirRecursive(fullPath));
+            } else if (EXTENSIONS.includes(path.extname(entry).toLowerCase()) && !SKIP_FILES.includes(entry)) {
+                results.push(fullPath);
+            }
+        }
+        return results;
+    }
+
+    const files = readDirRecursive(folderPath);
+    const fileContents = [];
+    let totalChars = 0;
+    const MAX_CHARS = 150000;
+
+    for (const filePath of files) {
+        try {
+            const content = fs.readFileSync(filePath, "utf-8");
+            const relativePath = path.relative(folderPath, filePath);
+            const entry = "### " + relativePath + String.fromCharCode(10) + "```" + String.fromCharCode(10) + content + String.fromCharCode(10) + "```";
+            if (totalChars + entry.length > MAX_CHARS) {
+                fileContents.push("### [Remaining files truncated - limit reached]");
+                break;
+            }
+            fileContents.push(entry);
+            totalChars += entry.length;
+        } catch (e) { continue; }
+    }
+
+    const projectText = fileContents.join(String.fromCharCode(10) + String.fromCharCode(10));
+    const folderName = path.basename(folderPath);
+
+    const sysPrompt = "You are a technical documentation assistant. Read the following project codebase and produce a single dense structured markdown document that primes a future Claude instance with full context. Include: project overview and purpose, complete file structure with descriptions, architecture and data flow, key functions and their roles, dependencies and configuration, known patterns and conventions used, and suggested next steps or improvements. Be thorough but concise. Optimize for information density.";
+    const userMsg = "Project: " + folderName + String.fromCharCode(10) + String.fromCharCode(10) + "Files:" + String.fromCharCode(10) + String.fromCharCode(10) + projectText;
+
+    const response = await anthropicClient.messages.create({
+        model: "claude-opus-4-20250514",
+        max_tokens: 8192,
+        system: sysPrompt,
+        messages: [{ role: "user", content: userMsg }]
+    });
+
+    return { briefing: response.content[0].text, fileCount: files.length, folderName };
+});
 ipcMain.handle("compact-conversation", async (event, { messages, title }) => {
     if (!anthropicClient) { throw new Error("No API key set."); }
     var NL = String.fromCharCode(10);
