@@ -41,10 +41,7 @@ marked.setOptions({
 });
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-let _stateReady = false;
-
 async function saveState() {
-    if (!_stateReady) return;
     await window.cowork.saveConversations({
         conversations: state.conversations,
         activeId: state.activeId,
@@ -60,9 +57,7 @@ async function loadState() {
         state.activeId = saved.activeId || saved.conversations[0].id;
         state.systemPrompt = saved.systemPrompt || DEFAULT_SYSTEM_PROMPT;
         state.savedMessages = saved.savedMessages || [];
-    }
-    _stateReady = true;
-    if (state.conversations.length === 0) {
+    } else {
         newConversation();
     }
     systemPromptInput.value = state.systemPrompt;
