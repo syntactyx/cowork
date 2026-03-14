@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
@@ -11,7 +11,13 @@ function getKeyPath() {
 
 function loadApiKey() {
     try {
-        const key = fs.readFileSync(getKeyPath(), "utf8").trim();
+        const raw = fs.readFileSync(getKeyPath());
+        let key;
+        if (safeStorage.isEncryptionAvailable() && raw[0] !== 115) {
+            key = safeStorage.decryptString(raw).trim();
+        } else {
+            key = raw.toString("utf8").trim();
+        }
         if (key) {
             const Anthropic = require("@anthropic-ai/sdk");
             anthropicClient = new Anthropic({ apiKey: key });
@@ -52,13 +58,25 @@ app.on("activate", () => {
 });
 
 ipcMain.handle("get-api-key", () => {
-    try { return fs.readFileSync(getKeyPath(), "utf8").trim(); } catch (e) { return ""; }
+    try {
+        const raw = fs.readFileSync(getKeyPath());
+        if (safeStorage.isEncryptionAvailable() && raw[0] !== 115) {
+            return safeStorage.decryptString(raw).trim();
+        }
+        return raw.toString("utf8").trim();
+    } catch (e) { return ""; }
 });
 
 ipcMain.handle("set-api-key", (event, key) => {
-    fs.writeFileSync(getKeyPath(), key.trim(), "utf8");
+    const trimmed = key.trim();
+    if (safeStorage.isEncryptionAvailable()) {
+        const encrypted = safeStorage.encryptString(trimmed);
+        fs.writeFileSync(getKeyPath(), encrypted);
+    } else {
+        fs.writeFileSync(getKeyPath(), trimmed, "utf8");
+    }
     const Anthropic = require("@anthropic-ai/sdk");
-    anthropicClient = new Anthropic({ apiKey: key.trim() });
+    anthropicClient = new Anthropic({ apiKey: trimmed });
     return true;
 });
 
