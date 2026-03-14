@@ -1,6 +1,6 @@
 {
   "name": "cowork-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Cowork desktop app powered by Claude",
   "main": "src/main.js",
   "author": "syntactyx",
