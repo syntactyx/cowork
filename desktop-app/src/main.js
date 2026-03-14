@@ -114,3 +114,25 @@ ipcMain.handle("load-conversations", async () => {
     }
     return null;
 });
+
+ipcMain.handle("compact-conversation", async (event, { messages, title }) => {
+    if (!anthropicClient) { throw new Error("No API key set."); }
+    var NL = String.fromCharCode(10);
+    const conversationText = messages.map(function(m) {
+        const role = m.role === "user" ? "USER" : "CLAUDE";
+        let content = m.content;
+        if (Array.isArray(content)) {
+            content = content.map(function(b) { return b.text || ""; }).join(" ");
+        }
+        return role + ": " + content;
+    }).join(NL + NL);
+    const sysPrompt = "You are a technical documentation assistant. Read the following conversation and produce a single dense structured markdown document to prime a future Claude instance with full context. Include: project overview and current state, all key decisions made and why, all code written with file paths, architecture and data flow, known issues and bugs, immediate next steps, and important developer gotchas. Be thorough but concise. Optimize for information density.";
+    const userMsg = "Conversation title: " + title + NL + NL + conversationText;
+    const response = await anthropicClient.messages.create({
+        model: "claude-opus-4-20250514",
+        max_tokens: 8192,
+        system: sysPrompt,
+        messages: [{ role: "user", content: userMsg }]
+    });
+    return response.content[0].text;
+});

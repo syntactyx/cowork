@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld("cowork", {
     onChunk: (callback) => ipcRenderer.on("stream-chunk", (_, text) => callback(text)),
     onDone: (callback) => ipcRenderer.on("stream-done", () => callback()),
     onError: (callback) => ipcRenderer.on("stream-error", (_, err) => callback(err)),
-    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+    compactConversation: (payload) => ipcRenderer.invoke("compact-conversation", payload)
 });

@@ -614,6 +614,38 @@ pasteBtn.addEventListener('click', async () => {
     }
 });
 
+// -- Compact & Export ---------------------------------------------------------
+async function compactConversation() {
+    const conv = getActiveConversation();
+    if (!conv || conv.messages.length === 0) {
+        showToast("Nothing to compact - conversation is empty.");
+        return;
+    }
+    const compactBtn = document.getElementById("compact-btn");
+    compactBtn.textContent = "Compacting...";
+    compactBtn.disabled = true;
+    try {
+        const result = await window.cowork.compactConversation({
+            messages: conv.messages,
+            title: conv.title
+        });
+        const blob = new Blob([result], { type: "text/markdown" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "cowork-compact-" + conv.title.replace(/[^a-z0-9]/gi, "_") + "-" + Date.now() + ".md";
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Conversation compacted and saved!");
+    } catch (err) {
+        showToast("Compact failed: " + err.message);
+        console.error("Compact error:", err);
+    } finally {
+        compactBtn.textContent = "Compact";
+        compactBtn.disabled = false;
+    }
+}
+
 // ── Export conversation ───────────────────────────────────────────────────────
 exportBtn.addEventListener('click', () => {
     const conv = getActiveConversation();
@@ -698,6 +730,7 @@ document.addEventListener('keydown', (e) => {
 
 // ── Saved messages button ─────────────────────────────────────────────────────
 document.getElementById('saved-msgs-btn').addEventListener('click', showSavedMessages);
+document.getElementById('compact-btn').addEventListener('click', compactConversation);
 
 // ── API Key ───────────────────────────────────────────────────────────────────
 const apiModalOverlay = document.getElementById('api-modal-overlay');
