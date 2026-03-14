@@ -1,3 +1,9 @@
 node_modules/
 dist/
 .env
+fix-*.js
+patch-*.js
+build-*.js
+check-*.js
+write-*.js
+add-*.js
