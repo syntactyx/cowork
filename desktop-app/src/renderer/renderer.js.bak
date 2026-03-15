@@ -49,8 +49,7 @@ let state = {
     autoTrigger: {
         enabled: false,
         threshold: 50,
-        confirm: true,
-        tailSize: 20
+        confirm: true
     }
 };
 
@@ -68,9 +67,7 @@ function sanitizeFilename(filename) {
 function validateState(stateObj) {
     if (!stateObj.conversations) stateObj.conversations = [];
     if (!stateObj.savedMessages) stateObj.savedMessages = [];
-    if (!stateObj.autoTrigger) stateObj.autoTrigger = { enabled: false, threshold: 50, confirm: true, tailSize: 20 };
-    if (stateObj.autoTrigger && !stateObj.autoTrigger.tailSize) stateObj.autoTrigger.tailSize = 20;
-    if (!stateObj.attachments) stateObj.attachments = [];
+    if (!stateObj.autoTrigger) stateObj.autoTrigger = { enabled: false, threshold: 50, confirm: true };
     return stateObj;
 }
 
@@ -137,13 +134,8 @@ async function loadState() {
     try {
         const saved = await window.cowork.loadConversations();
         if (saved && saved.conversations && saved.conversations.length > 0) {
-        const loaded = validateState(saved);
-        state.conversations = loaded.conversations;
-        state.activeId = loaded.activeId || loaded.conversations[0]?.id || null;
-        state.systemPrompt = loaded.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-        state.savedMessages = loaded.savedMessages;
-        state.autoTrigger = loaded.autoTrigger;
-        // attachments and attachment are intentionally not persisted — stay as []            state.activeId = saved.activeId || saved.conversations[0].id;
+            state = validateState(saved);
+            state.activeId = saved.activeId || saved.conversations[0].id;
             state.systemPrompt = saved.systemPrompt || DEFAULT_SYSTEM_PROMPT;
         }
         _stateReady = true;
@@ -239,10 +231,6 @@ function renderMessages() {
     }
 
     conv.messages.forEach((msg, index) => {
-        if (msg._isCompacted) {
-            if (msg.role === 'user') { renderCompactedBanner(msg, index); }
-            return;
-        }
         if (msg.role === 'user') {
             addUserMessage(msg.content, false, index);
         } else {
@@ -276,47 +264,6 @@ function makeMessageActions(index) {
 
 function scrollToBottom() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function renderCompactedBanner(msg, index) {
-    const banner = document.createElement('div');
-    banner.style.cssText = 'margin:8px 0;border:1px solid #3c3c3c;border-radius:8px;background:#1e1e1e;overflow:hidden;';
-
-    const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;user-select:none;background:#252526;';
-    header.title = 'Click to expand/collapse compacted conversation summary';
-
-    const label = document.createElement('span');
-    label.style.cssText = 'font-size:12px;color:#888;';
-    label.textContent = '📄 ' + (msg._compactedCount
-        ? 'Compacted context (' + msg._compactedCount + ' messages)'
-        : 'Compacted context');
-
-    const toggle = document.createElement('span');
-    toggle.style.cssText = 'font-size:11px;color:#555;';
-    toggle.textContent = '▼ expand';
-
-    header.appendChild(label);
-    header.appendChild(toggle);
-    banner.appendChild(header);
-
-    const body = document.createElement('div');
-    body.style.cssText = 'display:none;padding:12px 14px;max-height:300px;overflow-y:auto;font-size:12px;color:#888;line-height:1.5;';
-    let briefingText = typeof msg.content === 'string' ? msg.content : '';
-    const prefixEnd = briefingText.indexOf('\n');
-    if (prefixEnd > 0) { briefingText = briefingText.slice(prefixEnd + 2); }
-    body.innerHTML = marked.parse(briefingText);
-    banner.appendChild(body);
-
-    let expanded = false;
-    header.addEventListener('click', () => {
-        expanded = !expanded;
-        body.style.display = expanded ? 'block' : 'none';
-        toggle.textContent = expanded ? '▲ collapse' : '▼ expand';
-        if (expanded) { body.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el)); }
-    });
-
-    messagesEl.appendChild(banner);
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -710,9 +657,9 @@ async function sendMessage() {
     inputEl.style.height = 'auto';
     sendBtn.disabled = true;
 
-    let userContent;  // ← ADD THIS LINE
+    let userContent;
 
-    if (state.attachments && Array.isArray(state.attachments) && state.attachments.length > 0) {
+    if (state.attachments.length > 0) {
         userContent = state.attachments.map(f => ({
             type: 'text',
             text: `File: ${f.fileName}\n\n${f.content}`,
@@ -886,59 +833,19 @@ async function compactConversation() {
     compactBtn.textContent = "Compacting...";
     compactBtn.disabled = true;
 
-    const tailSize = state.autoTrigger.tailSize || 20;
-    const rawMessages = conv.messages.filter(m => !m._isCompacted);
-    const isIncremental = rawMessages.length > tailSize + 2;
-
     try {
-        const messagesToCompact = isIncremental
-            ? rawMessages.slice(0, -tailSize)
-            : rawMessages;
-
-        if (messagesToCompact.length === 0) {
-            showToast("Not enough messages to compact — tail covers the whole conversation.");
-            return;
-        }
-
         const result = await window.cowork.compactConversation({
-            messages: messagesToCompact,
+            messages: conv.messages,
             title: conv.title
         });
-
         const ts = Date.now().toString();
         downloadFile(result, `cowork-compact-${sanitizeFilename(conv.title)}-${ts}.md`, "text/markdown");
-
+        
+        // Save briefing for diff mode (fire-and-forget, non-blocking)
         window.cowork.saveBriefing({ content: result, title: conv.title, timestamp: ts })
             .catch(err => console.error("Failed to save briefing for diff:", err));
-
-        if (isIncremental) {
-            const tail = rawMessages.slice(-tailSize);
-            const summaryPair = [
-                {
-                    role: 'user',
-                    content: 'Context summary from earlier in this conversation:\n\n' + result,
-                    _isCompacted: true,
-                    _compactedCount: messagesToCompact.length
-                },
-                {
-                    role: 'assistant',
-                    content: 'Understood. I have reviewed the prior context and am ready to continue.',
-                    _isCompacted: true
-                }
-            ];
-            conv.messages = [...summaryPair, ...tail];
-            showToast("Incremental compact done — kept last " + tailSize + " messages.");
-        } else {
-            conv.messages = [];
-            conv.title = 'New Chat';
-            showToast("Conversation compacted and cleared.");
-        }
-
-        conv.lastUpdated = Date.now();
-        saveState();
-        renderSidebar();
-        renderMessages();
-
+        
+        showToast("Conversation compacted and saved!");
     } catch (err) {
         showToast("Compact failed: " + err.message);
         console.error("Compact error:", err);
@@ -986,7 +893,7 @@ settingsBtn.addEventListener('click', () => {
     if (!document.getElementById('autotrigger-section')) {
         const section = document.createElement('div');
         section.id = 'autotrigger-section';
-        section.style.cssText = 'border-top:1px solid #3c3c3c;padding-top:14px;display:flex;flex-direction:column;gap:10px;background:#252526;';
+        section.style.cssText = 'border-top:1px solid #3c3c3c;padding-top:14px;display:flex;flex-direction:column;gap:10px;';
         section.innerHTML = [
             '<div style="font-size:12px;font-weight:600;color:#aaa;letter-spacing:0.05em;">AUTO-TRIGGER COMPACTION</div>',
             '<div style="display:flex;align-items:center;gap:10px;">',
@@ -1007,11 +914,6 @@ settingsBtn.addEventListener('click', () => {
                     '<option value="confirm">Ask before compacting</option>',
                     '<option value="silent">Compact silently</option>',
                 '</select>',
-            '</div>',
-            '<div style="display:flex;align-items:center;gap:10px;">',
-                '<label style="font-size:13px;color:#d4d4d4;white-space:nowrap;">Recent messages to keep:</label>',
-                '<input type="number" id="at-tailsize" min="5" max="100" step="5"',
-                    'style="width:70px;' + STYLES.input + '" title="How many recent messages to preserve after incremental compact">',
             '</div>'
         ].join('');
 
@@ -1025,7 +927,6 @@ settingsBtn.addEventListener('click', () => {
     document.getElementById('at-enabled').checked = state.autoTrigger.enabled;
     document.getElementById('at-threshold').value = state.autoTrigger.threshold;
     document.getElementById('at-behavior').value = state.autoTrigger.confirm ? 'confirm' : 'silent';
-    document.getElementById('at-tailsize').value = state.autoTrigger.tailSize || 20;
 
     modalOverlay.classList.add('visible');
 });
@@ -1041,15 +942,12 @@ modalSave.addEventListener('click', () => {
     const atEnabled = document.getElementById('at-enabled');
     const atThreshold = document.getElementById('at-threshold');
     const atBehavior = document.getElementById('at-behavior');
-    const atTailSize = document.getElementById('at-tailsize');
     if (atEnabled && atThreshold && atBehavior) {
         const threshold = parseInt(atThreshold.value, 10);
-        const tailSize = parseInt(atTailSize ? atTailSize.value : '20', 10);
         state.autoTrigger = {
             enabled: atEnabled.checked,
             threshold: isNaN(threshold) || threshold < 10 ? 50 : threshold,
-            confirm: atBehavior.value === 'confirm',
-            tailSize: isNaN(tailSize) || tailSize < 5 ? 20 : tailSize
+            confirm: atBehavior.value === 'confirm'
         };
     }
 
@@ -1416,9 +1314,9 @@ function showAutoTriggerPrompt(conv) {
 
     document.body.appendChild(div);
 
-    document.getElementById('at-dismiss-btn').title = 'Skip incremental compaction this time';
+    document.getElementById('at-dismiss-btn').title = 'Skip auto-compaction this time';
     document.getElementById('at-dismiss-btn').onclick = () => div.remove();
-    document.getElementById('at-compact-btn').title = 'Compact older messages now, keeping recent ones intact';
+    document.getElementById('at-compact-btn').title = 'Compact conversation now and clear history';
     document.getElementById('at-compact-btn').onclick = () => {
         div.remove();
         runAutoCompact(conv);
@@ -1432,22 +1330,9 @@ async function runAutoCompact(conv) {
     const compactBtn = document.getElementById('compact-btn');
     if (compactBtn) { compactBtn.textContent = 'Compacting...'; compactBtn.disabled = true; }
 
-    const tailSize = state.autoTrigger.tailSize || 20;
-    const rawMessages = conv.messages.filter(m => !m._isCompacted);
-    const isIncremental = rawMessages.length > tailSize + 2;
-
     try {
-        const messagesToCompact = isIncremental
-            ? rawMessages.slice(0, -tailSize)
-            : rawMessages;
-
-        if (messagesToCompact.length === 0) {
-            showToast('Nothing new to compact.');
-            return;
-        }
-
         const result = await window.cowork.compactConversation({
-            messages: messagesToCompact,
+            messages: conv.messages,
             title: conv.title
         });
 
@@ -1457,35 +1342,15 @@ async function runAutoCompact(conv) {
         window.cowork.saveBriefing({ content: result, title: conv.title, timestamp: ts })
             .catch(err => console.error('Failed to save briefing for diff:', err));
 
-        if (isIncremental) {
-            const tail = rawMessages.slice(-tailSize);
-            const summaryPair = [
-                {
-                    role: 'user',
-                    content: 'Context summary from earlier in this conversation:\n\n' + result,
-                    _isCompacted: true,
-                    _compactedCount: messagesToCompact.length
-                },
-                {
-                    role: 'assistant',
-                    content: 'Understood. I have reviewed the prior context and am ready to continue.',
-                    _isCompacted: true
-                }
-            ];
-            conv.messages = [...summaryPair, ...tail];
-            showToast('Auto-compacted! Kept last ' + tailSize + ' messages.');
-        } else {
-            conv.messages = [];
-            conv.title = 'New Chat';
-            conv.lastUpdated = Date.now();
-            showToast('Auto-compacted! Briefing downloaded, history cleared.');
-        }
-
+        // Clear the conversation history after compacting
+        conv.messages = [];
+        conv.title = 'New Chat';
         conv.lastUpdated = Date.now();
         saveState();
         renderSidebar();
         renderMessages();
 
+        showToast('Auto-compacted! Briefing downloaded, history cleared.');
     } catch (err) {
         showToast('Auto-compact failed: ' + err.message);
         console.error('Auto-compact error:', err);
@@ -1769,71 +1634,6 @@ function showSearchPanel() {
         debouncedSearch(_searchQuery);
     }
 }
-
-// ── Dynamic Tooltips ──────────────────────────────────────────────────────────
-function addDynamicTooltips() {
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            mutation.addedNodes.forEach((node) => {
-                if (node.nodeType !== Node.ELEMENT_NODE) { return; }
-
-                // Compacted context banners
-                node.querySelectorAll('[style*="cursor:pointer"]').forEach(header => {
-                    if (!header.title && header.textContent.includes('Compacted context')) {
-                        header.title = 'Click to expand/collapse compacted conversation summary';
-                    }
-                });
-
-                // Auto-trigger settings controls
-                const ids = {
-                    'at-tailsize': 'Number of recent messages to keep uncompacted (minimum 5)',
-                    'at-enabled':  'Automatically compact when conversation gets long',
-                    'at-threshold':'Number of messages that triggers auto-compaction',
-                    'at-behavior': 'Whether to ask for confirmation before auto-compacting'
-                };
-                Object.entries(ids).forEach(([id, tip]) => {
-                    const el = node.querySelector('#' + id);
-                    if (el && !el.title) { el.title = tip; }
-                });
-
-                // Save message modal inputs
-                const saveIds = {
-                    'save-title-input':    'Enter a descriptive title for this saved message',
-                    'save-tags-input':     'Add optional tags to help organize your saved messages',
-                    'close-save-modal-btn':'Close save message dialog',
-                    'cancel-save-btn':     'Cancel saving message',
-                    'confirm-save-btn':    'Save message to your collection'
-                };
-                Object.entries(saveIds).forEach(([id, tip]) => {
-                    const el = node.querySelector('#' + id);
-                    if (el && !el.title) { el.title = tip; }
-                });
-
-                // Diff modal elements
-                const diffIds = {
-                    'diff-select-a':       'Select the older briefing to compare',
-                    'diff-select-b':       'Select the newer briefing to compare',
-                    'run-diff-btn':        'Compare the selected briefings and show differences',
-                    'close-diff-modal-btn':'Close diff modal'
-                };
-                Object.entries(diffIds).forEach(([id, tip]) => {
-                    const el = node.querySelector('#' + id);
-                    if (el && !el.title) { el.title = tip; }
-                });
-
-                // Generic close buttons (×)
-                node.querySelectorAll('button').forEach(btn => {
-                    if (!btn.title && btn.innerHTML === '&#215;') {
-                        btn.title = 'Close modal';
-                    }
-                });
-            });
-        });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-}
-
-addDynamicTooltips();
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
