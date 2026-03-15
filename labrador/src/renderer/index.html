@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+    <title>Labrador</title>
+    <!-- All CSS from prior parts goes here — omitted for brevity, paste the full <style> block from earlier -->
+    <style>
+        /* === PASTE THE COMPLETE CSS FROM THE PREVIOUS PARTS HERE === */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252526;
+            --bg-tertiary: #2d2d2d;
+            --bg-hover: #333333;
+            --bg-active: #37373d;
+            --bg-input: #3c3c3c;
+            --text-primary: #d4d4d4;
+            --text-secondary: #969696;
+            --text-muted: #6a6a6a;
+            --accent: #0e7fd4;
+            --accent-hover: #1a8fe0;
+            --accent-dim: rgba(14, 127, 212, 0.15);
+            --border: #3e3e3e;
+            --border-light: #4e4e4e;
+            --success: #4ec9b0;
+            --warning: #dcdcaa;
+            --error: #f44747;
+            --orange: #ce9178;
+            --radius: 6px;
+            --radius-lg: 10px;
+            --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+        }
+
+        html,
+        body {
+            height: 100%;
+            font-family: var(--font);
+            font-size: 13px;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            min-width: 260px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-header .logo {
+            font-size: 22px;
+        }
+
+        .sidebar-actions {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 12px;
+            font-family: var(--font);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+            padding: 6px 10px;
+        }
+
+        .btn-ghost:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--error);
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+
+        .btn-danger:hover {
+            background: rgba(244, 71, 71, 0.15);
+        }
+
+        .session-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .session-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .session-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .session-list::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .session-item {
+            padding: 10px 12px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            margin-bottom: 4px;
+            transition: background 0.1s;
+            position: relative;
+        }
+
+        .session-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .session-item.active {
+            background: var(--bg-active);
+        }
+
+        .session-item .session-title {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            padding-right: 24px;
+        }
+
+        .session-item .session-meta {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .session-item .session-delete {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .session-item:hover .session-delete {
+            opacity: 1;
+        }
+
+        .phase-badge {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .phase-badge.phase-1 {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .phase-badge.phase-2 {
+            background: rgba(78, 201, 176, 0.15);
+            color: var(--success);
+        }
+
+        .phase-badge.phase-3 {
+            background: rgba(206, 145, 120, 0.15);
+            color: var(--orange);
+        }
+
+        .phase-badge.complete {
+            background: rgba(150, 150, 150, 0.15);
+            color: var(--text-secondary);
+        }
+
+        .sidebar-footer {
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .phase-indicator {
+            display: flex;
+            align-items: center;
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            gap: 0;
+        }
+
+        .phase-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .phase-step.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .phase-step.completed {
+            color: var(--success);
+        }
+
+        .phase-step .step-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            border: 2px solid currentColor;
+        }
+
+        .phase-step.active .step-num {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .phase-step.completed .step-num {
+            background: var(--success);
+            color: #fff;
+            border-color: var(--success);
+        }
+
+        .phase-connector {
+            width: 40px;
+            height: 2px;
+            background: var(--border);
+            margin: 0 4px;
+        }
+
+        .phase-connector.completed {
+            background: var(--success);
+        }
+
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px;
+        }
+
+        .content-area::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .content-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .content-area::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .welcome-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            gap: 16px;
+        }
+
+        .welcome-state .welcome-icon {
+            font-size: 64px;
+            opacity: 0.6;
+        }
+
+        .welcome-state h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .welcome-state p {
+            color: var(--text-secondary);
+            max-width: 420px;
+            line-height: 1.6;
+        }
+
+        .intake-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .intake-container h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .intake-container .subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .upload-zone .upload-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .upload-zone .upload-text {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .upload-zone .upload-text strong {
+            color: var(--text-primary);
+        }
+
+        .file-preview {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .file-preview.visible {
+            display: flex;
+        }
+
+        .file-preview .file-icon {
+            font-size: 20px;
+        }
+
+        .file-preview .file-name {
+            flex: 1;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .file-preview .file-remove {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+        }
+
+        .file-preview .file-remove:hover {
+            color: var(--error);
+        }
+
+        .divider-text {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 16px 0;
+            position: relative;
+        }
+
+        .divider-text::before,
+        .divider-text::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            width: calc(50% - 20px);
+            height: 1px;
+            background: var(--border);
+        }
+
+        .divider-text::before {
+            left: 0;
+        }
+
+        .divider-text::after {
+            right: 0;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 160px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: var(--font);
+            font-size: 13px;
+            padding: 14px;
+            resize: vertical;
+            line-height: 1.6;
+            transition: border-color 0.15s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .intake-actions {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border-light);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 60px;
+        }
+
+        .loading-state p {
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .session-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .session-container h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .session-container .experiment-type {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+
+        .session-container .experiment-summary {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .known-constants {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .known-constants h3 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--success);
+        }
+
+        .constants-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 8px;
+        }
+
+        .constant-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            padding: 4px 8px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+        }
+
+        .constant-item .label {
+            color: var(--text-secondary);
+        }
+
+        .constant-item .value {
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-weight: 500;
+        }
+
+        .input-group-section {
+            margin-bottom: 24px;
+        }
+
+        .input-group-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .form-field {
+            margin-bottom: 14px;
+            transition: opacity 0.3s, max-height 0.3s;
+        }
+
+        .form-field.hidden {
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 5px;
+        }
+
+        .form-field label .unit {
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+
+        .form-field label .optional-tag {
+            color: var(--text-muted);
+            font-weight: 400;
+            font-size: 10px;
+            font-style: italic;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-field input[type="text"],
+        .form-field input[type="number"],
+        .form-field select {
+            width: 100%;
+            max-width: 300px;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+            transition: border-color 0.15s;
+        }
+
+        .form-field input:focus,
+        .form-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-field .input-unit {
+            color: var(--text-muted);
+            font-size: 12px;
+            min-width: 30px;
+        }
+
+        .form-field .validation-warning {
+            font-size: 11px;
+            color: var(--warning);
+            margin-top: 4px;
+            display: none;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .form-field .validation-warning.visible {
+            display: flex;
+        }
+
+        .form-field .validation-error {
+            font-size: 11px;
+            color: var(--error);
+            margin-top: 4px;
+        }
+
+        .calculations-section {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .calculations-section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--orange);
+            margin-bottom: 12px;
+        }
+
+        .calc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 10px;
+        }
+
+        .calc-item {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px;
+        }
+
+        .calc-item .calc-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .calc-item .calc-value {
+            font-size: 16px;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .calc-item .calc-value.pending {
+            color: var(--text-muted);
+            font-style: italic;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .calc-item .calc-unit {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+
+        .optional-toggle {
+            margin-top: 20px;
+            margin-bottom: 16px;
+        }
+
+        .optional-toggle button {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            padding: 8px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: var(--font);
+            transition: all 0.15s;
+        }
+
+        .optional-toggle button:hover {
+            color: var(--text-primary);
+            border-color: var(--border-light);
+        }
+
+        .optional-inputs {
+            display: none;
+        }
+
+        .optional-inputs.visible {
+            display: block;
+        }
+
+        .assist-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 380px;
+            max-height: 400px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            display: none;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .assist-panel.visible {
+            display: flex;
+        }
+
+        .assist-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .assist-panel-header h4 {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .assist-panel-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-primary);
+            max-height: 250px;
+        }
+
+        .assist-panel-input {
+            display: flex;
+            gap: 8px;
+            padding: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .assist-panel-input input {
+            flex: 1;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: var(--font);
+        }
+
+        .assist-panel-input input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .assist-fab {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(14, 127, 212, 0.4);
+            z-index: 99;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        }
+
+        .assist-fab:hover {
+            transform: scale(1.1);
+        }
+
+        .assist-fab.visible {
+            display: flex;
+        }
+
+        .session-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 32px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .report-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .report-container h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .report-options {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .option-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .option-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+        }
+
+        .option-card {
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+
+        .option-card:hover {
+            border-color: var(--border-light);
+            background: var(--bg-hover);
+        }
+
+        .option-card.selected {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .option-card .card-icon {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+
+        .option-card .card-label {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .option-card .card-desc {
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .report-preview {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .report-preview.visible {
+            display: block;
+        }
+
+        .report-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            width: 420px;
+            max-width: 90vw;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .modal .form-group {
+            margin-bottom: 16px;
+        }
+
+        .modal .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+        }
+
+        .modal .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 13px;
+        }
+
+        .modal .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toast {
+            padding: 10px 20px;
+            border-radius: var(--radius);
+            font-size: 12px;
+            font-weight: 500;
+            animation: toast-in 0.3s ease, toast-out 0.3s ease 2.7s forwards;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .toast.success {
+            background: var(--success);
+            color: #1e1e1e;
+        }
+
+        .toast.error {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .toast.warning {
+            background: var(--warning);
+            color: #1e1e1e;
+        }
+
+        @keyframes toast-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes toast-out {
+            from {
+                opacity: 1;
+            }
+
+            to {
+                opacity: 0;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span class="logo">🐕</span>
+                <h1>Labrador</h1>
+            </div>
+            <div class="sidebar-actions">
+                <button class="btn btn-primary" id="btn-new-session">+ New Experiment</button>
+            </div>
+            <div class="session-list" id="session-list">
+                <!-- Populated dynamically -->
+            </div>
+            <div class="sidebar-footer">
+                <button class="btn btn-ghost" id="btn-settings" style="width:100%;">⚙ Settings</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Phase Indicator -->
+            <div class="phase-indicator" id="phase-indicator" style="display:none;">
+                <div class="phase-step" id="phase-step-1" data-phase="1">
+                    <span class="step-num">1</span>
+                    <span>Intake</span>
+                </div>
+                <div class="phase-connector" id="phase-conn-1"></div>
+                <div class="phase-step" id="phase-step-2" data-phase="2">
+                    <span class="step-num">2</span>
+                    <span>Session</span>
+                </div>
+                <div class="phase-connector" id="phase-conn-2"></div>
+                <div class="phase-step" id="phase-step-3" data-phase="3">
+                    <span class="step-num">3</span>
+                    <span>Report</span>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" id="content-area">
+
+                <!-- Welcome State -->
+                <div id="view-welcome" class="welcome-state">
+                    <div class="welcome-icon">🧪</div>
+                    <h2>Welcome to Labrador</h2>
+                    <p>Your digital lab notebook and report assistant. Start a new experiment to begin recording data,
+                        performing calculations, and generating reports.</p>
+                    <button class="btn btn-primary" id="btn-welcome-new" style="width:auto; padding: 10px 24px;">Start
+                        New Experiment</button>
+                </div>
+
+                <!-- Phase 1: Intake -->
+                <div id="view-intake" class="intake-container hidden">
+                    <h2>Experiment Intake</h2>
+                    <p class="subtitle">Upload a procedure document or describe your experiment below. Labrador will
+                        parse it and create a structured data collection form.</p>
+
+                    <div class="upload-zone" id="upload-zone">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-text">
+                            <strong>Click to upload</strong> a procedure file<br />
+                            PDF, image, or text document
+                        </div>
+                    </div>
+
+                    <div class="file-preview" id="file-preview">
+                        <span class="file-icon">📎</span>
+                        <span class="file-name" id="file-name"></span>
+                        <button class="file-remove" id="file-remove">✕</button>
+                    </div>
+
+                    <div class="divider-text">or type below</div>
+
+                    <textarea id="procedure-text"
+                        placeholder="Paste or type your lab procedure here...&#10;&#10;Example: Standardize a ~0.1 M NaOH solution by titration against KHP (potassium hydrogen phthalate). Weigh approximately 0.4-0.5 g of KHP into a 250 mL Erlenmeyer flask. Dissolve in 50 mL of distilled water. Add 2-3 drops of phenolphthalein indicator. Titrate with NaOH to the first persistent pink endpoint."></textarea>
+
+                    <div class="intake-actions">
+                        <button class="btn btn-secondary" id="btn-intake-cancel">Cancel</button>
+                        <button class="btn btn-primary" id="btn-intake-parse" style="width:auto;">
+                            Parse Procedure →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="view-loading" class="loading-state hidden">
+                    <div class="spinner" style="width:32px;height:32px;border-width:3px;"></div>
+                    <p id="loading-text">Analyzing procedure with Claude...</p>
+                </div>
+
+                <!-- Phase 2: Guided Session -->
+                <div id="view-session" class="session-container hidden">
+                    <h2 id="session-title"></h2>
+                    <div class="experiment-type" id="session-type"></div>
+                    <div class="experiment-summary" id="session-summary"></div>
+
+                    <!-- Known Constants -->
+                    <div class="known-constants" id="constants-section" style="display:none;">
+                        <h3>📋 Known Constants &amp; Given Values</h3>
+                        <div class="constants-grid" id="constants-grid"></div>
+                    </div>
+
+                    <!-- Required Inputs (grouped) -->
+                    <div id="required-inputs-container"></div>
+
+                    <!-- Calculations -->
+                    <div class="calculations-section" id="calculations-section" style="display:none;">
+                        <h3>🧮 Calculated Values</h3>
+                        <div class="calc-grid" id="calc-grid"></div>
+                    </div>
+
+                    <!-- Optional Inputs -->
+                    <div class="optional-toggle" id="optional-toggle" style="display:none;">
+                        <button id="btn-toggle-optional">Show Optional Fields ▾</button>
+                    </div>
+                    <div class                    <div class="optional-inputs" id="optional-inputs-container"></div>
+
+                    <!-- Session Actions -->
+                    <div class="session-actions">
+                        <button class="btn btn-secondary" id="btn-back-intake">← Back to Intake</button>
+                        <button class="btn btn-primary" id="btn-proceed-report" style="width:auto;">
+                            Generate Report →
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Phase 3: Report -->
+                <div id="view-report" class="report-container hidden">
+                    <h2>Generate Report</h2>
+
+                    <div class="report-options">
+                        <div class="option-group">
+                            <label>Output Format</label>
+                            <div class="option-cards" id="format-cards">
+                                <div class="option-card" data-format="markdown">
+                                    <div class="card-icon">📝</div>
+                                    <div class="card-label">Markdown</div>
+                                    <div class="card-desc">Quick summary</div>
+                                </div>
+                                <div class="option-card" data-format="latex">
+                                    <div class="card-icon">📐</div>
+                                    <div class="card-label">LaTeX</div>
+                                    <div class="card-desc">Typeset document</div>
+                                </div>
+                                <div class="option-card selected" data-format="docx">
+                                    <div class="card-icon">📘</div>
+                                    <div class="card-label">Word</div>
+                                    <div class="card-desc">.docx file</div>
+                                </div>
+                                <div class="option-card" data-format="pdf">
+                                    <div class="card-icon">📕</div>
+                                    <div class="card-label">PDF</div>
+                                    <div class="card-desc">Portable document</div>
+                                </div>
+                                <div class="option-card" data-format="xlsx">
+                                    <div class="card-icon">📊</div>
+                                    <div class="card-label">Excel</div>
+                                    <div class="card-desc">Data spreadsheet</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="option-group">
+                            <label>Formality Level</label>
+                            <div class="option-cards" id="formality-cards">
+                                <div class="option-card selected" data-formality="formal">
+                                    <div class="card-icon">🎓</div>
+                                    <div class="card-label">Formal</div>
+                                    <div class="card-desc">Assignment submission</div>
+                                </div>
+                                <div class="option-card" data-formality="publication">
+                                    <div class="card-icon">📰</div>
+                                    <div class="card-label">Publication</div>
+                                    <div class="card-desc">Research draft</div>
+                                </div>
+                                <div class="option-card" data-formality="informal">
+                                    <div class="card-icon">📓</div>
+                                    <div class="card-label">Informal</div>
+                                    <div class="card-desc">Personal record</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="report-actions" id="report-actions-top">
+                        <button class="btn btn-primary" id="btn-generate-report" style="width:auto;">
+                            Generate Report
+                        </button>
+                        <button class="btn btn-secondary" id="btn-back-session">← Back to Session</button>
+                    </div>
+
+                    <div class="report-preview" id="report-preview"></div>
+
+                    <div class="report-actions hidden" id="report-actions-bottom">
+                        <button class="btn btn-primary" id="btn-export-report" style="width:auto;">
+                            💾 Export Report
+                        </button>
+                        <button class="btn btn-secondary" id="btn-regenerate-report">
+                            🔄 Regenerate
+                        </button>
+                        <button class="btn btn-secondary" id="btn-back-session-2">← Back to Session</button>
+                    </div>
+                </div>
+
+            </div><!-- /content-area -->
+        </div><!-- /main-content -->
+
+        <!-- Assist FAB (Phase 2 only) -->
+        <button class="assist-fab" id="assist-fab" title="Ask Claude for help">?</button>
+
+        <!-- Assist Panel -->
+        <div class="assist-panel" id="assist-panel">
+            <div class="assist-panel-header">
+                <h4>🔬 Lab Assistant</h4>
+                <button class="btn btn-ghost" id="assist-close" style="padding:4px 8px;">✕</button>
+            </div>
+            <div class="assist-panel-body" id="assist-body">
+                <p style="color:var(--text-muted);">Ask a question about your experiment, a suspicious value, or request help interpreting a result.</p>
+            </div>
+            <div class="assist-panel-input">
+                <input type="text" id="assist-input" placeholder="e.g. Is 24.35 mL a reasonable endpoint?" />
+                <button class="btn btn-primary" id="assist-send" style="width:auto;">Send</button>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div class="modal-overlay" id="modal-settings">
+            <div class="modal">
+                <h3>⚙ Settings</h3>
+                <div class="form-group">
+                    <label>Anthropic API Key</label>
+                    <input type="password" id="input-api-key" placeholder="sk-ant-..." />
+                </div>
+                <div class="form-group">
+                    <label style="color:var(--text-muted); font-size:11px;">Your key is stored encrypted on disk and never sent anywhere except the Anthropic API.</label>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" id="btn-settings-cancel">Cancel</button>
+                    <button class="btn btn-primary" id="btn-settings-save" style="width:auto;">Save Key</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div class="toast-container" id="toast-container"></div>
+
+    </div><!-- /app-container -->
+
+    <script src="renderer.js"></script>
+</body>
+</html>
