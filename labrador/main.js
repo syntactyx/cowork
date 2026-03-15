@@ -11,7 +11,7 @@ function getKeyPath() {
     return path.join(app.getPath("userData"), "apikey.txt");
 }
 
-function loadApiKey() {
+async function loadApiKey() {
     try {
         const raw = fs.readFileSync(getKeyPath());
         let key;
@@ -21,7 +21,8 @@ function loadApiKey() {
             key = raw.toString("utf8").trim();
         }
         if (key) {
-            const Anthropic = require("@anthropic-ai/sdk/index.mjs");
+            // Dynamic import for Anthropic
+            const { default: Anthropic } = await import('@anthropic-ai/sdk');
             anthropicClient = new Anthropic({ apiKey: key });
             return true;
         }
@@ -48,8 +49,8 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, "src", "renderer", "index.html"));
 }
 
-app.whenReady().then(() => {
-    loadApiKey();
+app.whenReady().then(async () => {
+    await loadApiKey();
     createWindow();
 });
 
@@ -75,7 +76,7 @@ ipcMain.handle("get-api-key", () => {
     }
 });
 
-ipcMain.handle("set-api-key", (event, key) => {
+ipcMain.handle('set-api-key', async (event, key) => {
     const trimmed = key.trim();
     if (safeStorage.isEncryptionAvailable()) {
         const encrypted = safeStorage.encryptString(trimmed);
@@ -83,7 +84,7 @@ ipcMain.handle("set-api-key", (event, key) => {
     } else {
         fs.writeFileSync(getKeyPath(), trimmed, "utf8");
     }
-    const Anthropic = require("@anthropic-ai/sdk/index.mjs");
+    const { default: Anthropic } = await import('@anthropic-ai/sdk');
     anthropicClient = new Anthropic({ apiKey: trimmed });
     return true;
 });
@@ -168,7 +169,6 @@ ipcMain.handle("upload-procedure-file", async () => {
             : "image/webp";
         return { type: "image", fileName, base64, mediaType };
     } else if (ext === ".pdf") {
-        // For v0.1, read PDF as binary and send base64 to Claude's PDF support
         const buffer = fs.readFileSync(filePath);
         const base64 = buffer.toString("base64");
         return { type: "pdf", fileName, base64, mediaType: "application/pdf" };

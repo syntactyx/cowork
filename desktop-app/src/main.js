@@ -88,7 +88,7 @@ ipcMain.handle("send-message", async (event, { messages, systemPrompt, model }) 
     try {
         const stream = await anthropicClient.messages.stream({
             model: model || "claude-opus-4-6",
-            max_tokens: 8192,
+            max_tokens: 16384,
             system: systemPrompt,
             messages
         });
@@ -198,7 +198,7 @@ ipcMain.handle("scan-project", async (event, { folderPath }) => {
 
     const response = await anthropicClient.messages.create({
         model: "claude-opus-4-6",
-        max_tokens: 8192,
+        max_tokens: 16384,
         system: sysPrompt,
         messages: [{ role: "user", content: userMsg }]
     });
@@ -264,7 +264,7 @@ ipcMain.handle("compact-conversation", async (event, { messages, title }) => {
 
     const response = await anthropicClient.messages.create({
         model: "claude-opus-4-6",
-        max_tokens: 8192,
+        max_tokens: 16384,
         system: sysPrompt,
         messages: [{ role: "user", content: userMsg }]
     });
